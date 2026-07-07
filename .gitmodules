@@ -1,0 +1,9 @@
+[submodule "external/sdl"]
+	path = external/sdl
+	url = https://github.com/libsdl-org/sdl.git
+[submodule "external/cglm"]
+	path = external/cglm
+	url = https://github.com/recp/cglm.git
+[submodule "external/cimgui"]
+	path = external/cimgui
+	url = https://github.com/cimgui/cimgui.git
