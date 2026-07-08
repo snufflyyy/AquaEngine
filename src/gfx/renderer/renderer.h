@@ -11,6 +11,7 @@
 #include "gfx/window/window.h"
 #include "gfx/color.h"
 #include "gfx/material/material.h"
+#include "gfx/camera/camera.h"
 
 typedef struct AquaRendererCreateProperties {
 	bool vsync;
@@ -81,10 +82,10 @@ void aqua_renderer_set_vsync(AquaRenderer* renderer, bool value);
 void aqua_renderer_set_clear_color(AquaColor color);
 void aqua_renderer_clear(void);
 
-void aqua_renderer_bind_shader(AquaRenderer* renderer, usize shader_index);
-void aqua_renderer_rebind_shader(AquaRenderer* renderer);
+AquaShaderHandle aqua_renderer_create_shader(AquaRenderer* renderer, const char* vertex_shader_source_path, const char* fragment_shader_source_path);
+AquaMeshHandle aqua_renderer_create_mesh(AquaRenderer* renderer, AquaVertex* vertices, u32 vertices_count, GLuint* indices, u32 indices_count);
 
-void aqua_renderer_draw_mesh(AquaRenderer* renderer, AquaMeshHandle mesh, AquaMaterial* material);
+void aqua_renderer_draw_mesh(AquaRenderer* renderer, AquaCamera* camera, AquaMeshHandle mesh, AquaMaterial* material);
 
 void aqua_renderer_imgui_begin(AquaRenderer* renderer);
 void aqua_renderer_imgui_update(AquaRenderer* renderer);

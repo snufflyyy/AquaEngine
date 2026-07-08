@@ -149,11 +149,28 @@ void aqua_renderer_rebind_shader(AquaRenderer* renderer) {
 	glUseProgram(renderer->resource_manager.shaders[renderer->current_shader].program);
 }
 
-void aqua_renderer_draw_mesh(AquaRenderer* renderer, AquaMeshHandle mesh, AquaMaterial* material) {
+inline AquaShaderHandle aqua_renderer_create_shader(AquaRenderer* renderer, const char* vertex_shader_source_path, const char* fragment_shader_source_path) {
+	return aqua_renderer_resource_manager_create_shader(&renderer->resource_manager, vertex_shader_source_path, fragment_shader_source_path);
+}
+
+inline AquaMeshHandle aqua_renderer_create_mesh(AquaRenderer* renderer, AquaVertex* vertices, u32 vertices_count, GLuint* indices, u32 indices_count) {
+	return aqua_renderer_resource_manager_create_mesh(&renderer->resource_manager, vertices, vertices_count, indices, indices_count);
+}
+
+void aqua_renderer_draw_mesh(AquaRenderer* renderer, AquaCamera* camera, AquaMeshHandle mesh, AquaMaterial* material) {
     AquaMesh* m = &renderer->resource_manager.meshes[mesh];
 
     aqua_renderer_bind_shader(renderer, material->shader);
+
     aqua_shader_set_vec3_uniform(material->color_uniform_location, material->color);
+
+    aqua_shader_set_mat4_uniform(renderer->resource_manager.shaders[material->shader].view_uniform_location, camera->view);
+    aqua_shader_set_mat4_uniform(renderer->resource_manager.shaders[material->shader].projection_uniform_location, camera->projection);
+
+    mat4 model = GLM_MAT4_IDENTITY_INIT;
+    glm_translated(model, (vec3) { 0.0f, 0.0f, -1.0f });
+
+    aqua_shader_set_mat4_uniform(renderer->resource_manager.shaders[material->shader].model_uniform_location, model);
 
     glBindVertexArray(m->vao);
     glDrawElements(GL_TRIANGLES, (GLsizei) m->indices_count, GL_UNSIGNED_INT, 0);
