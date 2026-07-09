@@ -20,7 +20,7 @@ typedef struct AquaTickHandler {
 	u64 last_count;
 	f64 lag;
 
-	f64 frequency;
+	u64 frequency;
 } AquaTickHandler;
 
 AquaTickHandler aqua_tick_handler_create(u32 tick_rate);

@@ -1,5 +1,6 @@
 #include "event.h"
-#include "SDL3/SDL_events.h"
+
+#include <stdio.h>
 
 #include <SDL3/SDL.h>
 
@@ -16,6 +17,16 @@ bool aqua_event_poll(AquaEvent* event) {
 				.new_width = (u32) event->sdl_event.window.data1,
 				.new_height = (u32) event->sdl_event.window.data2,
 			};
+		} break;
+		case SDL_EVENT_MOUSE_MOTION: {
+            event->type = AQUA_EVENT_TYPE_MOUSE_MOTION;
+            event->mouse_motion = (AquaEventMouseMotion) {
+                .x = event->sdl_event.motion.x,
+                .y = event->sdl_event.motion.y,
+
+                .x_relative = event->sdl_event.motion.xrel,
+                .y_relative = event->sdl_event.motion.yrel,
+            };
 		} break;
 		default: event->type = AQUA_EVENT_TYPE_NONE; break;
 	}

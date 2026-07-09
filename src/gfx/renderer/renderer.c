@@ -82,7 +82,7 @@ AquaRenderer* aqua_renderer_create(AquaRendererCreateProperties create_propertie
         .show_performance_window = create_properties.show_performance_window,
         .show_properties_window = create_properties.show_properties_window,
     };
-    glm_vec3_copy(renderer->properties.clear_color, create_properties.clear_color);
+    glm_vec3_copy(create_properties.clear_color, renderer->properties.clear_color);
 
     aqua_renderer_set_vsync(renderer, renderer->properties.vsync);
 
@@ -139,7 +139,7 @@ void aqua_renderer_clear(void) {
 }
 
 void aqua_renderer_bind_shader(AquaRenderer* renderer, usize shader_index) {
-	if (renderer->current_shader == shader_index) { return; }
+    if (renderer->current_shader == shader_index) { return; }
 
 	glUseProgram(renderer->resource_manager.shaders[shader_index].program);
 	renderer->current_shader = shader_index;

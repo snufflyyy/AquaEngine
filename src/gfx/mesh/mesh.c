@@ -1,6 +1,8 @@
 #include "gfx/mesh/mesh.h"
 #include "gfx/vertex.h"
 
+#include <string.h>
+
 #include <glad/glad.h>
 
 #include "utils/base-types.h"
@@ -18,11 +20,15 @@ AquaMesh aqua_mesh_create(AquaVertex* vertices, u32 vertices_count, GLuint* indi
 		return (AquaMesh) {0};
 	}
 
+	memcpy(mesh.vertices, vertices, vertices_count * sizeof(AquaVertex));
+
 	if (!mesh.indices) {
 		fprintf(stderr, "[ERROR] [Aqua] [Mesh] Failed to allocate memory for mesh's indices!\n");
 		free(mesh.vertices);
 		return (AquaMesh) {0};
 	}
+
+	memcpy(mesh.indices, indices, indices_count * sizeof(GLuint));
 
     glGenVertexArrays(1, &mesh.vao);
     glGenBuffers(1, &mesh.vbo);
@@ -57,7 +63,7 @@ void aqua_mesh_reload(AquaMesh* mesh) {
     glBufferData(GL_ARRAY_BUFFER, mesh->vertices_count * sizeof(AquaVertex), mesh->vertices, GL_STATIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh->indices_count * sizeof(GLuint), mesh->vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh->indices_count * sizeof(GLuint), mesh->indices, GL_STATIC_DRAW);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(AquaVertex), (void*) 0);
     glEnableVertexAttribArray(0);

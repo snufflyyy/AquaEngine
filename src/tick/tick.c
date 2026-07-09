@@ -28,10 +28,10 @@ void aqua_tick_handler_update(AquaTickHandler* tick_handler) {
 	assert(tick_handler != NULL);
 
 	u64 current_count = SDL_GetPerformanceCounter();
-	f64 elapsed_counts = current_count - tick_handler->last_count;
+	u64 elapsed_counts = current_count - tick_handler->last_count;
 	tick_handler->last_count = current_count;
 
-	f64 elapsed_time = elapsed_counts / tick_handler->frequency;
+	f64 elapsed_time = (f64) elapsed_counts / tick_handler->frequency;
 	tick_handler->lag += elapsed_time;
 }
 

@@ -23,7 +23,7 @@ AquaShader aqua_shader_create(const char* vertex_shader_source_path, const char*
     }
 
     const char* fragment_shader_source = aqua_file_to_string(fragment_shader_source_path);
-    if (!vertex_shader_source) {
+    if (!fragment_shader_source) {
     	fprintf(stderr, "[ERROR] [Aqua] [Shader] Failed to open fragment shader source file: %s!\n", fragment_shader_source_path);
     	aqua_file_free_string((char*) vertex_shader_source);
      	return (AquaShader) {0};

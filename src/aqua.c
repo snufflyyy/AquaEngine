@@ -61,10 +61,10 @@ AquaEngineContext* aqua_engine_context_create(AquaProject* project, AquaEngineCo
 	return aqua_context;
 
 error:
-	if (aqua_context) { free(aqua_context); }
-	SDL_Quit();
-	if (aqua_context->window) { aqua_window_destroy(aqua_context->window); }
 	if (aqua_context->renderer) { aqua_renderer_destroy(aqua_context->renderer); }
+	if (aqua_context->window) { aqua_window_destroy(aqua_context->window); }
+	SDL_Quit();
+	if (aqua_context) { free(aqua_context); }
 	return NULL;
 }
 
