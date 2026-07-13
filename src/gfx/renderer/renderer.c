@@ -80,6 +80,7 @@ AquaRenderer* aqua_renderer_create(AquaRendererCreateProperties create_propertie
       	.gl_opengl_version = (char*) glGetString(GL_VERSION),
        	.gl_glsl_version = (char*) glGetString(GL_SHADING_LANGUAGE_VERSION),
         .show_performance_window = create_properties.show_performance_window,
+        .imgui_process_input = true,
         .show_properties_window = create_properties.show_properties_window,
     };
     glm_vec3_copy(create_properties.clear_color, renderer->properties.clear_color);
@@ -98,8 +99,9 @@ void aqua_renderer_event(AquaRenderer *renderer, AquaEvent *event) {
 		case AQUA_EVENT_TYPE_WINDOW_RESIZED: glViewport(0, 0, (GLsizei) event->window.new_width, (GLsizei) event->window.new_height); break;
 		default: break;
 	}
-
-	ImGui_ImplSDL3_ProcessEvent(&event->sdl_event);
+	if (renderer->properties.imgui_process_input) {
+		ImGui_ImplSDL3_ProcessEvent(&event->sdl_event);
+	}
 }
 
 void aqua_renderer_update(AquaRenderer* renderer) {

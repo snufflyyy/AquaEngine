@@ -52,6 +52,8 @@ typedef struct AquaRendererProperties {
 
 	bool show_performance_window;
 
+	bool imgui_process_input;
+
 	bool show_properties_window;
 } AquaRendererProperties;
 

@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 
+#include "input/input.h"
 #include "project/project.h"
 #include "tick/tick.h"
 #include "gfx/window/window.h"
@@ -33,6 +34,7 @@ typedef struct AquaEngineContext {
 
 	AquaWindow* window;
 	AquaRenderer* renderer;
+	AquaInputManager input_manager;
 
 	AquaContextProperties properties;
 } AquaEngineContext;

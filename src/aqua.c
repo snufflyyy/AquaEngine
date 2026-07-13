@@ -11,6 +11,7 @@
 #include "event/event.h"
 #include "gfx/renderer/renderer.h"
 #include "gfx/window/window.h"
+#include "input/input.h"
 #include "project/project.h"
 #include "tick/tick.h"
 
@@ -54,6 +55,8 @@ AquaEngineContext* aqua_engine_context_create(AquaProject* project, AquaEngineCo
 		goto error;
 	}
 
+	aqua_context->input_manager = aqua_input_manager_create(aqua_context->window);
+
 	aqua_context->properties = (AquaContextProperties) {
 		.show_properties_window = properties.show_properties_window,
 	};
@@ -78,6 +81,8 @@ void aqua_engine_context_event(AquaEngineContext* aqua_context, AquaEvent* event
 	}
 
 	aqua_window_event(aqua_context->window, event);
+
+	aqua_context->renderer->properties.imgui_process_input = !aqua_context->input_manager.properties.mouse_captured;
 	aqua_renderer_event(aqua_context->renderer, event);
 }
 
@@ -97,6 +102,7 @@ void aqua_engine_context_update(AquaEngineContext* aqua_context) {
 void aqua_engine_context_destroy(AquaEngineContext* aqua_context) {
 	assert(aqua_context != NULL);
 
+	aqua_input_manager_destroy(&aqua_context->input_manager);
 	aqua_renderer_destroy(aqua_context->renderer);
 	aqua_window_destroy(aqua_context->window);
 	SDL_Quit();
@@ -107,6 +113,7 @@ void aqua_engine_imgui_update(AquaEngineContext* aqua_context) {
 	aqua_tick_handler_imgui_update(&aqua_context->tick_handler);
 	aqua_window_imgui_update(aqua_context->window);
 	aqua_renderer_imgui_update(aqua_context->renderer);
+	aqua_input_manager_imgui_update(&aqua_context->input_manager);
 
 	if (aqua_context->properties.show_properties_window) {
 		aqua_engine_imgui_properties_window(aqua_context);
@@ -122,6 +129,7 @@ void aqua_engine_imgui_properties_window(AquaEngineContext* aqua_context) {
 	igCheckbox("Show Tick Handler Properties", &aqua_context->tick_handler.properties.show_properties_window);
 	igCheckbox("Show Window Properties", &aqua_context->window->properties.show_properties_window);
 	igCheckbox("Show Renderer Properties", &aqua_context->renderer->properties.show_properties_window);
+	igCheckbox("Show Input Manager Properties", &aqua_context->input_manager.properties.show_properties_window);
 	igEnd();
 }
 

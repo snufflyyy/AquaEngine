@@ -18,6 +18,14 @@ bool aqua_event_poll(AquaEvent* event) {
 				.new_height = (u32) event->sdl_event.window.data2,
 			};
 		} break;
+		case SDL_EVENT_KEY_UP: {
+			event->type = AQUA_EVENT_TYPE_KEY_UP;
+			event->key.scancode = (AquaEventKeyScancode) event->sdl_event.key.scancode;
+		} break;
+		case SDL_EVENT_KEY_DOWN: {
+			event->type = AQUA_EVENT_TYPE_KEY_DOWN;
+			event->key.scancode = (AquaEventKeyScancode) event->sdl_event.key.scancode;
+		} break;
 		case SDL_EVENT_MOUSE_MOTION: {
             event->type = AQUA_EVENT_TYPE_MOUSE_MOTION;
             event->mouse_motion = (AquaEventMouseMotion) {

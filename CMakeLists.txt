@@ -8,11 +8,11 @@ find_package(OpenGL REQUIRED)
 add_library(glad external/glad/src/glad.c)
 target_include_directories(glad PUBLIC external/glad/include)
 
-find_package(SDL3 REQUIRED CONFIG)
+#find_package(SDL3 REQUIRED CONFIG)
 
-#set(SDL_TESTS OFF)
-#set(SDL_EXAMPLES OFF)
-#add_subdirectory(external/sdl)
+set(SDL_TESTS OFF)
+set(SDL_EXAMPLES OFF)
+add_subdirectory(external/sdl)
 
 add_subdirectory(external/cimgui)
 target_include_directories(cimgui PUBLIC
@@ -44,6 +44,8 @@ add_library(
  src/gfx/camera/camera.c
 
  src/gfx/renderer/renderer.c
+
+ src/input/input.c
 
  external/cimgui/imgui/backends/imgui_impl_sdl3.cpp
  external/cimgui/imgui/backends/imgui_impl_opengl3.cpp
