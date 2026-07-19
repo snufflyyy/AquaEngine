@@ -59,9 +59,13 @@ typedef struct AquaRendererProperties {
 
 typedef struct AquaRenderer {
 	SDL_GLContext gl_context;
+
 	AquaShaderHandle current_shader;
+	AquaTextureHandle current_texture;
 
 	AquaRendererResourceManager resource_manager;
+
+	AquaShaderHandle base_material_shader;
 
 	u64 last_performance_counter;
 	double performance_frequency;
@@ -85,6 +89,7 @@ void aqua_renderer_set_clear_color(AquaColor color);
 void aqua_renderer_clear(void);
 
 AquaShaderHandle aqua_renderer_create_shader(AquaRenderer* renderer, const char* vertex_shader_source_path, const char* fragment_shader_source_path);
+AquaTextureHandle aqua_renderer_create_texture(AquaRenderer* renderer, const char* image_path);
 AquaMeshHandle aqua_renderer_create_mesh(AquaRenderer* renderer, AquaVertex* vertices, u32 vertices_count, GLuint* indices, u32 indices_count);
 
 void aqua_renderer_draw_mesh(AquaRenderer* renderer, AquaCamera* camera, AquaMeshHandle mesh, AquaMaterial* material);

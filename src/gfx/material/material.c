@@ -3,21 +3,43 @@
 #include <stdio.h>
 #include <assert.h>
 
-#include "gfx/renderer/renderer.h"
-#include "gfx/shader/shader.h"
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include <cimgui.h>
+#include <cimgui_impl.h>
 
-AquaMaterial* aqua_material_create(AquaRenderer* renderer, AquaShaderHandle shader, AquaColor color) {
+#include "gfx/renderer/renderer.h"
+#include "gfx/texture/texture.h"
+
+AquaMaterial* aqua_material_create(AquaRenderer* renderer, AquaTextureHandle texture, AquaColor color) {
     AquaMaterial* material = (AquaMaterial*) malloc(sizeof(AquaMaterial));
     if (!material) {
         fprintf(stderr, "[ERROR] [Aqua] [Material] Failed to allocate memory for material!\n");
         return NULL;
     }
 
-    material->shader = shader;
-    glm_vec3_copy(color, material->color);
-    material->color_uniform_location = aqua_shader_get_uniform_location(renderer->resource_manager.shaders[shader], "color");
+    material->shader = renderer->base_material_shader;
+    material->texture = texture;
+
+    glm_vec4_copy(color, material->color);
+    material->color_uniform_location = aqua_shader_get_uniform_location(renderer->resource_manager.shaders[material->shader], "color");
+
+    material->color_strength = 0.5f;
+    material->color_strength_uniform_location = aqua_shader_get_uniform_location(renderer->resource_manager.shaders[material->shader], "color_strength");
 
     return material;
+}
+
+void aqua_material_imgui_properties_window(AquaMaterial* material) {
+	igBegin("Material Properties", &material->properties.show_properties_window, ImGuiWindowFlags_None);
+	igColorEdit4("Color", material->color, ImGuiColorEditFlags_None);
+	igSliderFloat("Color Strength", &material->color_strength, 0.0f, 1.0f, "%0.2f", ImGuiSliderFlags_None);
+	igEnd();
+}
+
+void aqua_material_imgui_update(AquaMaterial* material) {
+	if (material->properties.show_properties_window) {
+		aqua_material_imgui_properties_window(material);
+	}
 }
 
 void aqua_material_destroy(AquaMaterial* material) {

@@ -22,7 +22,7 @@ AquaEngineContext* aqua_engine_context_create(AquaProject* project, AquaEngineCo
 		goto error;
 	}
 
-	aqua_context->project = *project;
+	aqua_context->project = project;
 
 	aqua_context->tick_handler = aqua_tick_handler_create(properties.tick_handler_properties.tick_rate);
 
@@ -64,10 +64,12 @@ AquaEngineContext* aqua_engine_context_create(AquaProject* project, AquaEngineCo
 	return aqua_context;
 
 error:
-	if (aqua_context->renderer) { aqua_renderer_destroy(aqua_context->renderer); }
-	if (aqua_context->window) { aqua_window_destroy(aqua_context->window); }
-	SDL_Quit();
-	if (aqua_context) { free(aqua_context); }
+	if (aqua_context) {
+		if (aqua_context->renderer) { aqua_renderer_destroy(aqua_context->renderer); }
+		if (aqua_context->window) { aqua_window_destroy(aqua_context->window); }
+		SDL_Quit();
+		free(aqua_context);
+	}
 	return NULL;
 }
 
@@ -110,6 +112,8 @@ void aqua_engine_context_destroy(AquaEngineContext* aqua_context) {
 }
 
 void aqua_engine_imgui_update(AquaEngineContext* aqua_context) {
+	aqua_context->project->imgui_update(aqua_context);
+
 	aqua_tick_handler_imgui_update(&aqua_context->tick_handler);
 	aqua_window_imgui_update(aqua_context->window);
 	aqua_renderer_imgui_update(aqua_context->renderer);
@@ -123,9 +127,10 @@ void aqua_engine_imgui_update(AquaEngineContext* aqua_context) {
 void aqua_engine_imgui_properties_window(AquaEngineContext* aqua_context) {
 	igBegin("Aqua Properties", &aqua_context->properties.show_properties_window, ImGuiWindowFlags_None);
 	igSeparatorText("Project");
-	igText("Name: %s\n", aqua_context->project.name);
-	igText("Creator: %s\n", aqua_context->project.creator);
-	igSeparator();
+	igText("Name: %s\n", aqua_context->project->name);
+	igText("Creator: %s\n", aqua_context->project->creator);
+	igCheckbox("Show Project Properties", &aqua_context->project->show_properties_window);
+	igSeparatorText("Engine");
 	igCheckbox("Show Tick Handler Properties", &aqua_context->tick_handler.properties.show_properties_window);
 	igCheckbox("Show Window Properties", &aqua_context->window->properties.show_properties_window);
 	igCheckbox("Show Renderer Properties", &aqua_context->renderer->properties.show_properties_window);
@@ -134,20 +139,18 @@ void aqua_engine_imgui_properties_window(AquaEngineContext* aqua_context) {
 }
 
 void aqua_engine_run(AquaEngineContext* aqua_context) {
-	aqua_context->project.initialize(aqua_context);
-
-	aqua_context->running = true;
+	aqua_context->running = aqua_context->project->initialize(aqua_context);
 	while (aqua_context->running) {
 		AquaEvent event;
 		while (aqua_event_poll(&event)) {
 			aqua_engine_context_event(aqua_context, &event);
-			aqua_context->project.event(aqua_context, &event);
+			aqua_context->project->event(aqua_context, &event);
 		}
 
 		aqua_tick_handler_update(&aqua_context->tick_handler);
-		if (aqua_tick_handler_should_tick(&aqua_context->tick_handler)) {
+		while (aqua_tick_handler_should_tick(&aqua_context->tick_handler)) {
 			aqua_engine_context_tick(aqua_context);
-			aqua_context->project.tick(aqua_context);
+			aqua_context->project->tick(aqua_context);
 
 			aqua_tick_handler_update_lag(&aqua_context->tick_handler);
 		}
@@ -155,9 +158,9 @@ void aqua_engine_run(AquaEngineContext* aqua_context) {
 		aqua_renderer_imgui_begin(aqua_context->renderer);
 
 		aqua_engine_context_update(aqua_context);
-		aqua_context->project.update(aqua_context);
+		aqua_context->project->update(aqua_context);
 
-		aqua_context->project.render(aqua_context);
+		aqua_context->project->render(aqua_context);
 
 		aqua_renderer_imgui_end(aqua_context->renderer);
 
@@ -166,5 +169,5 @@ void aqua_engine_run(AquaEngineContext* aqua_context) {
 		aqua_window_swap(aqua_context->window);
 	}
 
-	aqua_context->project.destroy(aqua_context);
+	aqua_context->project->destroy(aqua_context);
 }

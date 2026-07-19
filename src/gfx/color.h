@@ -2,4 +2,4 @@
 
 #include <cglm/cglm.h>
 
-typedef vec3 AquaColor;
+typedef vec4 AquaColor;

@@ -8,12 +8,15 @@ typedef struct AquaProject {
 	char* name;
 	char* creator;
 
+	bool show_properties_window;
+
 	void* project_data_ptr;
 
-	void (*initialize)(struct AquaEngineContext* aqua_context);
+	bool (*initialize)(struct AquaEngineContext* aqua_context);
 	void (*event)(struct AquaEngineContext* aqua_context, AquaEvent* event);
 	void (*tick)(struct AquaEngineContext* aqua_context);
 	void (*update)(struct AquaEngineContext* aqua_context);
 	void (*render)(struct AquaEngineContext* aqua_context);
+	void (*imgui_update)(struct AquaEngineContext* aqua_context);
 	void (*destroy)(struct AquaEngineContext* aqua_context);
 } AquaProject;

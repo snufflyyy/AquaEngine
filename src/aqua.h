@@ -27,7 +27,7 @@ typedef struct AquaContextProperties {
 } AquaContextProperties;
 
 typedef struct AquaEngineContext {
-	AquaProject project;
+	AquaProject* project;
 
 	bool running;
 	AquaTickHandler tick_handler;

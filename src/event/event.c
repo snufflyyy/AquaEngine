@@ -1,4 +1,5 @@
 #include "event.h"
+#include "SDL3/SDL_events.h"
 
 #include <stdio.h>
 
@@ -10,6 +11,7 @@ bool aqua_event_poll(AquaEvent* event) {
 	}
 
 	switch (event->sdl_event.type) {
+		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
 		case SDL_EVENT_QUIT: event->type = AQUA_EVENT_TYPE_EXIT; break;
 		case SDL_EVENT_WINDOW_RESIZED: {
 			event->type = AQUA_EVENT_TYPE_WINDOW_RESIZED;

@@ -1,9 +1,14 @@
 #include "gfx/mesh/mesh.h"
 #include "gfx/vertex.h"
 
+#include <stdbool.h>
 #include <string.h>
 
 #include <glad/glad.h>
+
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include <cimgui.h>
+#include <cimgui_impl.h>
 
 #include "utils/base-types.h"
 
@@ -17,7 +22,7 @@ AquaMesh aqua_mesh_create(AquaVertex* vertices, u32 vertices_count, GLuint* indi
 
 	if (!mesh.vertices) {
 		fprintf(stderr, "[ERROR] [Aqua] [Mesh] Failed to allocate memory for mesh's vertices!\n");
-		return (AquaMesh) {0};
+		return (AquaMesh) { .failed = true };
 	}
 
 	memcpy(mesh.vertices, vertices, vertices_count * sizeof(AquaVertex));
@@ -25,7 +30,7 @@ AquaMesh aqua_mesh_create(AquaVertex* vertices, u32 vertices_count, GLuint* indi
 	if (!mesh.indices) {
 		fprintf(stderr, "[ERROR] [Aqua] [Mesh] Failed to allocate memory for mesh's indices!\n");
 		free(mesh.vertices);
-		return (AquaMesh) {0};
+		return (AquaMesh) { .failed = true };
 	}
 
 	memcpy(mesh.indices, indices, indices_count * sizeof(GLuint));
@@ -53,10 +58,14 @@ AquaMesh aqua_mesh_create(AquaVertex* vertices, u32 vertices_count, GLuint* indi
 
     glBindVertexArray(0);
 
+    mesh.failed = false;
+
     return mesh;
 }
 
 void aqua_mesh_reload(AquaMesh* mesh) {
+	if (mesh->failed) { return; }
+
 	glBindVertexArray(mesh->vao);
     glBindBuffer(GL_ARRAY_BUFFER, mesh->vbo);
 
@@ -75,6 +84,31 @@ void aqua_mesh_reload(AquaMesh* mesh) {
     glEnableVertexAttribArray(2);
 
     glBindVertexArray(0);
+}
+
+void aqua_mesh_imgui_collapsible_header(AquaMesh* mesh, const char* header_label) {
+	if (igCollapsingHeader_BoolPtr(header_label, NULL, ImGuiTreeNodeFlags_None)) {
+		igText("Vertices Count %u", (u32) mesh->vertices_count);
+		for (usize j = 0; j < mesh->vertices_count; j++) {
+			igPushID_Int((i32) j);
+			igText("Vertex %u", j);
+			igInputFloat3("Position", mesh->vertices[j].position, "%0.2f", ImGuiInputTextFlags_None);
+			igInputFloat3("Normal", mesh->vertices[j].normal, "%0.2f", ImGuiInputTextFlags_None);
+			igInputFloat2("Texture Coordinate", mesh->vertices[j].texture_coords, "%0.2f", ImGuiInputTextFlags_None);
+			igPopID();
+		}
+		igSeparator();
+		igText("Indices Count: %u", (u32) mesh->indices_count);
+		igSeparator();
+		igText("VAO: %u", (u32) mesh->vao);
+		igText("VBO: %u", (u32) mesh->vbo);
+		igText("EBO: %u", (u32) mesh->ebo);
+		igSeparator();
+		if (igButton("Reload Mesh", (ImVec2) { 0.0f, 0.0f })) {
+			aqua_mesh_reload(mesh);
+		}
+		igSeparator();
+	}
 }
 
 void aqua_mesh_destroy(AquaMesh* mesh) {

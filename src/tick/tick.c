@@ -3,11 +3,14 @@
 #include <assert.h>
 
 #include <SDL3/SDL.h>
+#include <stdio.h>
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include <cimgui.h>
 #include <cimgui_impl.h>
 
 AquaTickHandler aqua_tick_handler_create(u32 tick_rate) {
+	if (tick_rate == 0) { tick_rate = 1; }
+
 	AquaTickHandler tick_handler = {
 		.properties = { .tick_rate = tick_rate },
 		.ms_per_tick = 1.0 / tick_rate,
@@ -20,6 +23,8 @@ AquaTickHandler aqua_tick_handler_create(u32 tick_rate) {
 }
 
 void aqua_tick_handler_set_tick_rate(AquaTickHandler* tick_handler, u32 new_tick_rate) {
+	if (new_tick_rate == 0) { new_tick_rate = 1; }
+
 	tick_handler->properties.tick_rate = new_tick_rate;
 	tick_handler->ms_per_tick = 1.0 / new_tick_rate;
 }

@@ -36,6 +36,7 @@ add_library(
  src/gfx/window/window.c
 
  src/gfx/shader/shader.c
+ src/gfx/texture/texture.c
  src/gfx/mesh/mesh.c
  src/gfx/renderer/resource-manager.c
 
