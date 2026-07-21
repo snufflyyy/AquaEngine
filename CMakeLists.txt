@@ -8,11 +8,11 @@ find_package(OpenGL REQUIRED)
 add_library(glad external/glad/src/glad.c)
 target_include_directories(glad PUBLIC external/glad/include)
 
-#find_package(SDL3 REQUIRED CONFIG)
+find_package(SDL3 REQUIRED CONFIG)
 
-set(SDL_TESTS OFF)
-set(SDL_EXAMPLES OFF)
-add_subdirectory(external/sdl)
+#set(SDL_TESTS OFF)
+#set(SDL_EXAMPLES OFF)
+#add_subdirectory(external/sdl)
 
 add_subdirectory(external/cimgui)
 target_include_directories(cimgui PUBLIC
@@ -39,6 +39,8 @@ add_library(
  src/gfx/texture/texture.c
  src/gfx/mesh/mesh.c
  src/gfx/renderer/resource-manager.c
+
+ src/model/model.c
 
  src/gfx/material/material.c
 

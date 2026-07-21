@@ -25,7 +25,7 @@ typedef struct AquaRendererCreateProperties {
 	bool show_properties_window;
 } AquaRendererCreateProperties;
 
-const static AquaRendererCreateProperties AQUA_RENDERER_DEFAULT_CREATE_PROPERTIES = {
+static const AquaRendererCreateProperties AQUA_RENDERER_DEFAULT_CREATE_PROPERTIES = {
 	.vsync = true,
 
 	.rainbow_clear_color = false,
@@ -60,10 +60,10 @@ typedef struct AquaRendererProperties {
 typedef struct AquaRenderer {
 	SDL_GLContext gl_context;
 
-	AquaShaderHandle current_shader;
-	AquaTextureHandle current_texture;
-
 	AquaRendererResourceManager resource_manager;
+
+	AquaCamera* current_camera;
+	AquaMaterial* current_material;
 
 	AquaShaderHandle base_material_shader;
 
@@ -92,7 +92,11 @@ AquaShaderHandle aqua_renderer_create_shader(AquaRenderer* renderer, const char*
 AquaTextureHandle aqua_renderer_create_texture(AquaRenderer* renderer, const char* image_path);
 AquaMeshHandle aqua_renderer_create_mesh(AquaRenderer* renderer, AquaVertex* vertices, u32 vertices_count, GLuint* indices, u32 indices_count);
 
-void aqua_renderer_draw_mesh(AquaRenderer* renderer, AquaCamera* camera, AquaMeshHandle mesh, AquaMaterial* material);
+void aqua_renderer_bind_camera(AquaRenderer* renderer, AquaCamera* camera);
+void aqua_renderer_bind_material(AquaRenderer* renderer, AquaMaterial* material);
+
+void aqua_renderer_draw_mesh(AquaRenderer* renderer, AquaMeshHandle mesh);
+void aqua_renderer_draw_submesh(AquaRenderer* renderer, AquaMeshHandle mesh, u32 indices_start, u32 indices_count);
 
 void aqua_renderer_imgui_begin(AquaRenderer* renderer);
 void aqua_renderer_imgui_update(AquaRenderer* renderer);

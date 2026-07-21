@@ -17,7 +17,7 @@ typedef struct AquaWindowProperties {
 	bool show_properties_window;
 } AquaWindowProperties;
 
-const static AquaWindowProperties AQUA_WINDOW_DEFAULT_WINDOW_PROPERTIES = {
+static const AquaWindowProperties AQUA_WINDOW_DEFAULT_WINDOW_PROPERTIES = {
 	.width = 1280,
 	.height = 720,
 	.title = "Aqua Engine",

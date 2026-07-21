@@ -23,14 +23,18 @@ AquaMaterial* aqua_material_create(AquaRenderer* renderer, AquaTextureHandle tex
     glm_vec4_copy(color, material->color);
     material->color_uniform_location = aqua_shader_get_uniform_location(renderer->resource_manager.shaders[material->shader], "color");
 
-    material->color_strength = 0.5f;
+    material->color_strength = 0.0f;
     material->color_strength_uniform_location = aqua_shader_get_uniform_location(renderer->resource_manager.shaders[material->shader], "color_strength");
+
+    material->properties = (AquaMaterialProperties) { .show_properties_window = false };
 
     return material;
 }
 
 void aqua_material_imgui_properties_window(AquaMaterial* material) {
 	igBegin("Material Properties", &material->properties.show_properties_window, ImGuiWindowFlags_None);
+	igText("Shader Handle: %u", material->shader);
+	igText("Texture Handle: %u", material->texture);
 	igColorEdit4("Color", material->color, ImGuiColorEditFlags_None);
 	igSliderFloat("Color Strength", &material->color_strength, 0.0f, 1.0f, "%0.2f", ImGuiSliderFlags_None);
 	igEnd();

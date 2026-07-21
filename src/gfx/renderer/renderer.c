@@ -51,7 +51,6 @@ AquaRenderer* aqua_renderer_create(AquaRendererCreateProperties create_propertie
 
     glViewport(0, 0, (int) window->properties.width, (int) window->properties.height);
 
-    renderer->current_shader = USIZE_MAX;
     renderer->resource_manager = aqua_renderer_resource_manager_create();
 
     renderer->base_material_shader = aqua_renderer_create_shader(renderer, "../AquaEngine/src/shaders/material/material.vert", "../AquaEngine/src/shaders/material/material.frag");
@@ -137,7 +136,6 @@ void aqua_renderer_update(AquaRenderer* renderer) {
 	}
 }
 
-
 void aqua_renderer_set_vsync(AquaRenderer* renderer, bool value) {
 	SDL_GL_SetSwapInterval((value) ? 1 : 0);
 	renderer->properties.vsync = value;
@@ -153,22 +151,39 @@ void aqua_renderer_clear(void) {
 
 void aqua_renderer_bind_shader(AquaRenderer* renderer, AquaShaderHandle shader) {
 	if (shader == AQUA_SHADER_HANDLE_INVALID) { return; }
-	if (shader ==renderer->current_shader) { return; }
 
 	glUseProgram(renderer->resource_manager.shaders[shader].program);
-	renderer->current_shader = shader;
+}
+
+void aqua_renderer_rebind_shader(AquaRenderer* renderer) {
+	glUseProgram(renderer->resource_manager.shaders[renderer->current_material->shader].program);
 }
 
 void aqua_renderer_bind_texture(AquaRenderer* renderer, AquaTextureHandle texture) {
 	if (texture == AQUA_TEXTURE_HANDLE_INVALID) { return; }
-	if (texture == renderer->current_texture) { return; }
 
+	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, renderer->resource_manager.textures[texture].id);
-	renderer->current_texture = texture;
 }
 
-void aqua_renderer_rebind_shader(AquaRenderer* renderer) {
-	glUseProgram(renderer->resource_manager.shaders[renderer->current_shader].program);
+void aqua_renderer_bind_material(AquaRenderer* renderer, AquaMaterial* material) {
+    if (material == NULL) { return; }
+    if (material == renderer->current_material) { return; }
+
+    aqua_renderer_bind_shader(renderer, material->shader);
+    aqua_renderer_bind_texture(renderer, material->texture);
+
+    aqua_shader_set_vec4_uniform(material->color_uniform_location, material->color);
+    aqua_shader_set_float_uniform(material->color_strength_uniform_location, material->color_strength);
+
+    renderer->current_material = material;
+}
+
+void aqua_renderer_bind_camera(AquaRenderer* renderer, AquaCamera* camera) {
+    if (camera == NULL) { return; }
+    if (camera == renderer->current_camera) { return; }
+
+    renderer->current_camera = camera;
 }
 
 AquaShaderHandle aqua_renderer_create_shader(AquaRenderer* renderer, const char* vertex_shader_source_path, const char* fragment_shader_source_path) {
@@ -183,27 +198,30 @@ AquaMeshHandle aqua_renderer_create_mesh(AquaRenderer* renderer, AquaVertex* ver
 	return aqua_renderer_resource_manager_create_mesh(&renderer->resource_manager, vertices, vertices_count, indices, indices_count);
 }
 
-void aqua_renderer_draw_mesh(AquaRenderer* renderer, AquaCamera* camera, AquaMeshHandle mesh, AquaMaterial* material) {
+void aqua_renderer_draw_mesh(AquaRenderer* renderer, AquaMeshHandle mesh) {
     AquaMesh* m = &renderer->resource_manager.meshes[mesh];
 
-    aqua_renderer_bind_shader(renderer, material->shader);
-
-    aqua_renderer_bind_texture(renderer, material->texture);
-
-    aqua_shader_set_vec4_uniform(material->color_uniform_location, material->color);
-    aqua_shader_set_float_uniform(material->color_strength_uniform_location, material->color_strength);
-
-    aqua_shader_set_mat4_uniform(renderer->resource_manager.shaders[material->shader].view_uniform_location, camera->view);
-    aqua_shader_set_mat4_uniform(renderer->resource_manager.shaders[material->shader].projection_uniform_location, camera->projection);
-
     mat4 model = GLM_MAT4_IDENTITY_INIT;
-    glm_translated(model, (vec3) { 0.0f, 0.0f, -1.0f });
-
-    aqua_shader_set_mat4_uniform(renderer->resource_manager.shaders[material->shader].model_uniform_location, model);
+    AquaShader* shader = &renderer->resource_manager.shaders[renderer->current_material->shader];
+    aqua_shader_set_mat4_uniform(shader->view_uniform_location, renderer->current_camera->view);
+    aqua_shader_set_mat4_uniform(shader->projection_uniform_location, renderer->current_camera->projection);
+    aqua_shader_set_mat4_uniform(shader->model_uniform_location, model);
 
     glBindVertexArray(m->vao);
     glDrawElements(GL_TRIANGLES, (GLsizei) m->indices_count, GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0);
+}
+
+void aqua_renderer_draw_submesh(AquaRenderer* renderer, AquaMeshHandle mesh, u32 indices_start, u32 indices_count) {
+    AquaMesh* m = &renderer->resource_manager.meshes[mesh];
+
+    mat4 model = GLM_MAT4_IDENTITY_INIT;
+    AquaShader* shader = &renderer->resource_manager.shaders[renderer->current_material->shader];
+    aqua_shader_set_mat4_uniform(shader->view_uniform_location, renderer->current_camera->view);
+    aqua_shader_set_mat4_uniform(shader->projection_uniform_location, renderer->current_camera->projection);
+    aqua_shader_set_mat4_uniform(shader->model_uniform_location, model);
+
+    glBindVertexArray(m->vao);
+    glDrawElements(GL_TRIANGLES, (GLsizei) indices_count, GL_UNSIGNED_INT, (void*)(uintptr_t)(indices_start * sizeof(GLuint)));
 }
 
 void aqua_renderer_imgui_begin(AquaRenderer* renderer) {
@@ -243,7 +261,7 @@ void aqua_renderer_imgui_properties_window(AquaRenderer* renderer) {
 	igText("OpenGL Version: %s\n", renderer->properties.gl_opengl_version);
 	igText("GLSL Version: %s\n", renderer->properties.gl_glsl_version);
 	igSeparator();
-	igText("Currently bound shader index: %u", (u32) renderer->current_shader);
+	//igText("Currently bound shader handle: %u", (u32) renderer->current_shader);
 	if (igButton("Rebind Shader", (ImVec2) { 0.0f, 0.0f })) {
         aqua_renderer_rebind_shader(renderer);
 	}

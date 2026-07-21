@@ -15,7 +15,7 @@ typedef struct AquaEngineContextInitializeProperties {
 	bool show_properties_window;
 } AquaEngineContextInitializeProperties;
 
-const static AquaEngineContextInitializeProperties AQUA_ENGINE_CONTEXT_DEFAULT_INITIALIZE_PROPERTIES = {
+static const AquaEngineContextInitializeProperties AQUA_ENGINE_CONTEXT_DEFAULT_INITIALIZE_PROPERTIES = {
 	.tick_handler_properties = AQUA_TICK_HANDLER_DEFAULT_PROPERTIES,
 	.window_properties = AQUA_WINDOW_DEFAULT_WINDOW_PROPERTIES,
 	.renderer_create_properties = AQUA_RENDERER_DEFAULT_CREATE_PROPERTIES,
