@@ -22,5 +22,6 @@ typedef struct AquaTexture {
 typedef usize AquaTextureHandle;
 
 AquaTexture aqua_texture_create(const char* image_path);
+AquaTexture aqua_texture_create_from_memory(const u8* buffer, u32 buffer_length);
 void aqua_texture_imgui_collapsible_header(AquaTexture* texture, const char* header_label);
 void aqua_texture_destroy(AquaTexture* texture);

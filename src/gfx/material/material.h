@@ -24,6 +24,7 @@ typedef struct AquaMaterial {
 struct AquaRenderer;
 
 AquaMaterial* aqua_material_create(struct AquaRenderer* renderer, AquaTextureHandle texture, AquaColor color);
+void aqua_material_change_shader(struct AquaRenderer* renderer, AquaMaterial* material, AquaShaderHandle shader);
 void aqua_material_imgui_update(AquaMaterial* material);
 void aqua_material_imgui_properties_window(AquaMaterial* material);
 void aqua_material_destroy(AquaMaterial* material);

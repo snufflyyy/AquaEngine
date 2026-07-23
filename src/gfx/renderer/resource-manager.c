@@ -43,7 +43,25 @@ AquaTextureHandle aqua_renderer_resource_manager_create_texture(AquaRendererReso
 
 	resource_manager->textures[i] = aqua_texture_create(image_path);
 	if (resource_manager->shaders[i].failed) {
-		fprintf(stderr, "[ERROR] [Aqua] [Renderer Resource Manager] Failed to create shader!\n");
+		fprintf(stderr, "[ERROR] [Aqua] [Renderer Resource Manager] Failed to create texture!\n");
+		return AQUA_SHADER_HANDLE_INVALID;
+	}
+	resource_manager->texture_count++;
+
+	return i;
+}
+
+AquaTextureHandle aqua_renderer_resource_manager_create_texture_from_memory(AquaRendererResourceManager* resource_manager, const u8* buffer, u32 buffer_length) {
+   	if (resource_manager->texture_count >= AQUA_RENDERER_RESOURCE_MANAGER_MAX_TEXTURE_COUNT) {
+		fprintf(stderr, "[ERROR] [Aqua] [Renderer Resource Manager] Failed to add new texture, max texture count (%u) reached!\n", AQUA_RENDERER_RESOURCE_MANAGER_MAX_SHADER_COUNT);
+		return AQUA_SHADER_HANDLE_INVALID;
+	}
+
+	usize i = resource_manager->texture_count;
+
+	resource_manager->textures[i] = aqua_texture_create_from_memory(buffer, buffer_length);
+	if (resource_manager->shaders[i].failed) {
+		fprintf(stderr, "[ERROR] [Aqua] [Renderer Resource Manager] Failed to create texture!\n");
 		return AQUA_SHADER_HANDLE_INVALID;
 	}
 	resource_manager->texture_count++;

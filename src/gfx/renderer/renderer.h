@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gfx/shader/shader.h"
+#include "gfx/model/model.h"
 #include "resource-manager.h"
 #include <SDL3/SDL.h>
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -90,6 +91,7 @@ void aqua_renderer_clear(void);
 
 AquaShaderHandle aqua_renderer_create_shader(AquaRenderer* renderer, const char* vertex_shader_source_path, const char* fragment_shader_source_path);
 AquaTextureHandle aqua_renderer_create_texture(AquaRenderer* renderer, const char* image_path);
+AquaTextureHandle aqua_renderer_create_texture_from_memory(AquaRenderer* renderer, const u8* buffer, u32 buffer_length);
 AquaMeshHandle aqua_renderer_create_mesh(AquaRenderer* renderer, AquaVertex* vertices, u32 vertices_count, GLuint* indices, u32 indices_count);
 
 void aqua_renderer_bind_camera(AquaRenderer* renderer, AquaCamera* camera);
@@ -97,6 +99,8 @@ void aqua_renderer_bind_material(AquaRenderer* renderer, AquaMaterial* material)
 
 void aqua_renderer_draw_mesh(AquaRenderer* renderer, AquaMeshHandle mesh);
 void aqua_renderer_draw_submesh(AquaRenderer* renderer, AquaMeshHandle mesh, u32 indices_start, u32 indices_count);
+
+void aqua_renderer_draw_static_model(AquaRenderer* renderer, AquaStaticModel* model);
 
 void aqua_renderer_imgui_begin(AquaRenderer* renderer);
 void aqua_renderer_imgui_update(AquaRenderer* renderer);

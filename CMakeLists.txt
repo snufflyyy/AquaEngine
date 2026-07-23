@@ -39,14 +39,12 @@ add_library(
  src/gfx/texture/texture.c
  src/gfx/mesh/mesh.c
  src/gfx/renderer/resource-manager.c
-
- src/model/model.c
-
  src/gfx/material/material.c
-
+ src/gfx/renderer/renderer.c
+ src/gfx/model/model.c
  src/gfx/camera/camera.c
 
- src/gfx/renderer/renderer.c
+ src/fly-camera/fly-camera.c
 
  src/input/input.c
 

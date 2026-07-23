@@ -20,6 +20,16 @@ bool aqua_event_poll(AquaEvent* event) {
 				.new_height = (u32) event->sdl_event.window.data2,
 			};
 		} break;
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: {
+			event->type = AQUA_EVENT_TYPE_WINDOW_PIXEL_SIZE_CHANGED;
+			event->window = (AquaEventWindow) {
+				.new_width = (u32) event->sdl_event.window.data1,
+				.new_height = (u32) event->sdl_event.window.data2,
+			};
+		} break;
+		case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN: {
+            event->type = AQUA_EVENT_TYPE_WINDOW_LEAVE_FULLSCREEN;
+		} break;
 		case SDL_EVENT_KEY_UP: {
 			event->type = AQUA_EVENT_TYPE_KEY_UP;
 			event->key.scancode = (AquaEventKeyScancode) event->sdl_event.key.scancode;

@@ -1,4 +1,5 @@
 #include "material.h"
+#include "gfx/shader/shader.h"
 
 #include <stdio.h>
 #include <assert.h>
@@ -29,6 +30,12 @@ AquaMaterial* aqua_material_create(AquaRenderer* renderer, AquaTextureHandle tex
     material->properties = (AquaMaterialProperties) { .show_properties_window = false };
 
     return material;
+}
+
+void aqua_material_change_shader(AquaRenderer* renderer, AquaMaterial* material, AquaShaderHandle shader) {
+    material->shader = shader;
+    material->color_uniform_location = aqua_shader_get_uniform_location(renderer->resource_manager.shaders[material->shader], "color");
+    material->color_strength_uniform_location = aqua_shader_get_uniform_location(renderer->resource_manager.shaders[material->shader], "color_strength");
 }
 
 void aqua_material_imgui_properties_window(AquaMaterial* material) {

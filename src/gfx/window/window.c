@@ -47,6 +47,9 @@ void aqua_window_event(AquaWindow* window, AquaEvent* event) {
 			window->properties.width = (u32) event->window.new_width;
 			window->properties.height = (u32) event->window.new_height;
 		} break;
+		case AQUA_EVENT_TYPE_WINDOW_LEAVE_FULLSCREEN: {
+            window->properties.fullscreen = false;
+		}
 		default: break;
     }
 }

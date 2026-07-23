@@ -54,6 +54,41 @@ AquaTexture aqua_texture_create(const char* image_path) {
     return texture;
 }
 
+AquaTexture aqua_texture_create_from_memory(const u8* buffer, u32 buffer_length) {
+    i32 image_width, image_height, image_channels_count;
+    stbi_uc* image = stbi_load_from_memory(buffer, (i32) buffer_length, &image_width, &image_height, &image_channels_count, 4);
+    if (!image) {
+        fprintf(stderr, "[ERROR] [Texture] Failed to load image!\n");
+        return (AquaTexture) { .failed = true };
+    }
+
+    AquaTexture texture;
+
+    texture.width = (u32) image_width;
+    texture.height = (u32) image_height;
+
+    texture.image_path = NULL;
+
+    glGenTextures(1, &texture.id);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture.id);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    stbi_image_free(image);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    texture.failed = false;
+
+    return texture;
+}
+
 void aqua_texture_imgui_collapsible_header(AquaTexture* texture, const char* header_label) {
 	if (igCollapsingHeader_BoolPtr(header_label, NULL, ImGuiTreeNodeFlags_None)) {
 		igText("ID: %u", texture->id);

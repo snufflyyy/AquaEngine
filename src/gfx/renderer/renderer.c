@@ -194,6 +194,10 @@ AquaTextureHandle aqua_renderer_create_texture(AquaRenderer* renderer, const cha
 	return aqua_renderer_resource_manager_create_texture(&renderer->resource_manager, image_path);
 }
 
+AquaTextureHandle aqua_renderer_create_texture_from_memory(AquaRenderer* renderer, const u8* buffer, u32 buffer_length) {
+    return aqua_renderer_resource_manager_create_texture_from_memory(&renderer->resource_manager, buffer, buffer_length);
+}
+
 AquaMeshHandle aqua_renderer_create_mesh(AquaRenderer* renderer, AquaVertex* vertices, u32 vertices_count, GLuint* indices, u32 indices_count) {
 	return aqua_renderer_resource_manager_create_mesh(&renderer->resource_manager, vertices, vertices_count, indices, indices_count);
 }
@@ -222,6 +226,15 @@ void aqua_renderer_draw_submesh(AquaRenderer* renderer, AquaMeshHandle mesh, u32
 
     glBindVertexArray(m->vao);
     glDrawElements(GL_TRIANGLES, (GLsizei) indices_count, GL_UNSIGNED_INT, (void*)(uintptr_t)(indices_start * sizeof(GLuint)));
+}
+
+void aqua_renderer_draw_static_model(AquaRenderer* renderer, AquaStaticModel* model) {
+   	for (usize i = 0; i < model->submeshes_count; i++) {
+        AquaStaticModelSubMesh* submesh = &model->submeshes[i];
+
+        aqua_renderer_bind_material(renderer, submesh->material);
+        aqua_renderer_draw_submesh(renderer, submesh->mesh, submesh->indices_start, submesh->indices_count);
+	}
 }
 
 void aqua_renderer_imgui_begin(AquaRenderer* renderer) {

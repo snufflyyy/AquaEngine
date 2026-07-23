@@ -18,7 +18,7 @@ AquaCamera aqua_camera_create(vec3 position, f32 fov, f32 aspect) {
 	camera.near_plane = AQUA_CAMERA_DEFAULT_NEAR_PLANE;
 	camera.far_plane = AQUA_CAMERA_DEFAULT_FAR_PLANE;
 
-	glm_perspective(camera.fov, aspect, camera.near_plane, camera.far_plane, camera.projection);
+	glm_perspective(glm_rad(camera.fov), aspect, camera.near_plane, camera.far_plane, camera.projection);
 	glm_mat4_identity(camera.view);
 
 	camera.current_aspect = aspect;
@@ -29,11 +29,11 @@ AquaCamera aqua_camera_create(vec3 position, f32 fov, f32 aspect) {
 }
 
 void aqua_camera_update_projection(AquaCamera* camera) {
-	glm_perspective(camera->fov, camera->current_aspect, camera->near_plane, camera->far_plane, camera->projection);
+	glm_perspective(glm_rad(camera->fov), camera->current_aspect, camera->near_plane, camera->far_plane, camera->projection);
 }
 
 void aqua_camera_update_aspect(AquaCamera* camera, f32 aspect) {
-	glm_perspective(camera->fov, aspect, camera->near_plane, camera->far_plane, camera->projection);
+	glm_perspective(glm_rad(camera->fov), aspect, camera->near_plane, camera->far_plane, camera->projection);
 	camera->current_aspect = aspect;
 }
 
@@ -53,9 +53,7 @@ void aqua_camera_imgui_properties_window(AquaCamera* camera) {
 	igBegin("Camera Properties", &camera->properties.show_properties_window, ImGuiWindowFlags_None);
 
 	igInputFloat3("Position", camera->position, "%0.2f", ImGuiInputTextFlags_None);
-	f32 fov_degree = glm_deg(camera->fov);
-	if (igInputFloat("FOV", &fov_degree, 1.0f, 5.0f, "%0.2f", ImGuiInputTextFlags_None)) {
-		camera->fov = glm_rad(fov_degree);
+	if (igInputFloat("FOV", &camera->fov, 1.0f, 5.0f, "%0.2f", ImGuiInputTextFlags_None)) {
 		aqua_camera_update_projection(camera);
 	}
 	if (igInputFloat("Near Plane", &camera->near_plane, 0.01f, 0.05f, "%0.2f", ImGuiInputTextFlags_None)) { aqua_camera_update_projection(camera); }
