@@ -3,28 +3,19 @@
 #include "gfx/shader/shader.h"
 #include "gfx/color.h"
 #include "gfx/texture/texture.h"
+#include "utils/base-types.h"
 
-typedef struct AquaMaterialProperties {
-	bool show_properties_window;
-} AquaMaterialProperties;
+// index into the renderer's material manager; materials are created and owned by the engine
+typedef usize AquaMaterialHandle;
+#define AQUA_MATERIAL_HANDLE_INVALID USIZE_MAX
 
 typedef struct AquaMaterial {
     AquaShaderHandle shader;
-
-    AquaTextureHandle texture;
+    AquaTextureHandle texture; // AQUA_TEXTURE_HANDLE_INVALID binds the renderer's white default texture
 
     AquaColor color;
-    f32 color_strength;
-    AquaShaderUniformLocation color_uniform_location;
-    AquaShaderUniformLocation color_strength_uniform_location;
-
-    AquaMaterialProperties properties;
+    f32 color_strength; // 0 = texture only, 1 = color only
 } AquaMaterial;
 
-struct AquaRenderer;
-
-AquaMaterial* aqua_material_create(struct AquaRenderer* renderer, AquaTextureHandle texture, AquaColor color);
-void aqua_material_change_shader(struct AquaRenderer* renderer, AquaMaterial* material, AquaShaderHandle shader);
-void aqua_material_imgui_update(AquaMaterial* material);
-void aqua_material_imgui_properties_window(AquaMaterial* material);
-void aqua_material_destroy(AquaMaterial* material);
+// texture may be NULL (no preview is drawn)
+void aqua_material_imgui_collapsible_header(AquaMaterial* material, const AquaTexture* texture, const char* header_label);

@@ -1,60 +1,32 @@
 #include "material.h"
-#include "gfx/shader/shader.h"
-
-#include <stdio.h>
-#include <assert.h>
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include <cimgui.h>
 #include <cimgui_impl.h>
 
-#include "gfx/renderer/renderer.h"
-#include "gfx/texture/texture.h"
+void aqua_material_imgui_collapsible_header(AquaMaterial* material, const AquaTexture* texture, const char* header_label) {
+	if (igCollapsingHeader_BoolPtr(header_label, NULL, ImGuiTreeNodeFlags_None)) {
+		igPushID_Ptr(material);
 
-AquaMaterial* aqua_material_create(AquaRenderer* renderer, AquaTextureHandle texture, AquaColor color) {
-    AquaMaterial* material = (AquaMaterial*) malloc(sizeof(AquaMaterial));
-    if (!material) {
-        fprintf(stderr, "[ERROR] [Aqua] [Material] Failed to allocate memory for material!\n");
-        return NULL;
-    }
+		if (material->shader == AQUA_SHADER_HANDLE_INVALID) { igText("Shader Handle: none"); }
+		else { igText("Shader Handle: %zu", material->shader); }
 
-    material->shader = renderer->base_material_shader;
-    material->texture = texture;
+		if (material->texture == AQUA_TEXTURE_HANDLE_INVALID) { igText("Texture Handle: none (default white)"); }
+		else { igText("Texture Handle: %zu", material->texture); }
 
-    glm_vec4_copy(color, material->color);
-    material->color_uniform_location = aqua_shader_get_uniform_location(renderer->resource_manager.shaders[material->shader], "color");
+		igColorEdit4("Color", material->color, ImGuiColorEditFlags_None);
+		igSliderFloat("Color Strength", &material->color_strength, 0.0f, 1.0f, "%0.2f", ImGuiSliderFlags_None);
 
-    material->color_strength = 0.0f;
-    material->color_strength_uniform_location = aqua_shader_get_uniform_location(renderer->resource_manager.shaders[material->shader], "color_strength");
+		if (texture && !texture->failed && texture->width > 0 && texture->height > 0) {
+			const f32 preview_size = 64.0f;
+			f32 aspect = (f32) texture->width / (f32) texture->height;
+			ImVec2 size = (aspect >= 1.0f)
+				? (ImVec2) { preview_size, preview_size / aspect }
+				: (ImVec2) { preview_size * aspect, preview_size };
+			igImage((ImTextureRef) { NULL, texture->id }, size, (ImVec2) { 0.0f, 0.0f }, (ImVec2) { 1.0f, 1.0f });
+		}
 
-    material->properties = (AquaMaterialProperties) { .show_properties_window = false };
-
-    return material;
-}
-
-void aqua_material_change_shader(AquaRenderer* renderer, AquaMaterial* material, AquaShaderHandle shader) {
-    material->shader = shader;
-    material->color_uniform_location = aqua_shader_get_uniform_location(renderer->resource_manager.shaders[material->shader], "color");
-    material->color_strength_uniform_location = aqua_shader_get_uniform_location(renderer->resource_manager.shaders[material->shader], "color_strength");
-}
-
-void aqua_material_imgui_properties_window(AquaMaterial* material) {
-	igBegin("Material Properties", &material->properties.show_properties_window, ImGuiWindowFlags_None);
-	igText("Shader Handle: %u", material->shader);
-	igText("Texture Handle: %u", material->texture);
-	igColorEdit4("Color", material->color, ImGuiColorEditFlags_None);
-	igSliderFloat("Color Strength", &material->color_strength, 0.0f, 1.0f, "%0.2f", ImGuiSliderFlags_None);
-	igEnd();
-}
-
-void aqua_material_imgui_update(AquaMaterial* material) {
-	if (material->properties.show_properties_window) {
-		aqua_material_imgui_properties_window(material);
+		igPopID();
+		igSeparator();
 	}
-}
-
-void aqua_material_destroy(AquaMaterial* material) {
-    assert(material != NULL);
-
-    free(material);
 }

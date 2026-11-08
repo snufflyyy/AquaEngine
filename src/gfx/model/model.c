@@ -8,183 +8,344 @@
 #include "gfx/texture/texture.h"
 #include "gfx/vertex.h"
 #include "utils/base-types.h"
+
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
 
-static cgltf_accessor* aqua_cgltf_find_attribute(cgltf_primitive* primitive, cgltf_attribute_type type) {
-   	for (cgltf_size i = 0; i < primitive->attributes_count; i++) {
-          if (primitive->attributes[i].type == type) {
-              return primitive->attributes[i].data;
-          }
-      }
+static const cgltf_accessor* model_find_attribute(const cgltf_primitive* primitive, cgltf_attribute_type type) {
+	for (cgltf_size i = 0; i < primitive->attributes_count; i++) {
+		if (primitive->attributes[i].type == type) {
+			return primitive->attributes[i].data;
+		}
+	}
 
-      return NULL;
+	return NULL;
 }
 
-AquaStaticModel aqua_model_create(AquaRenderer* renderer ,const char* model_path) {
-    cgltf_options options = {0};
-    cgltf_data* data = NULL;
-    if (cgltf_parse_file(&options, model_path, &data) != cgltf_result_success) {
-        fprintf(stderr, "[ERROR] [Aqua] [Model] Failed to parse gltf file!\n");
-        // error
-    }
+// both passes over the primitives must agree on what gets loaded, so the rule lives here
+static bool model_primitive_is_drawable(const cgltf_primitive* primitive) {
+	return primitive->type == cgltf_primitive_type_triangles
+		&& model_find_attribute(primitive, cgltf_attribute_type_position) != NULL;
+}
 
-    cgltf_load_buffers(&options, data, model_path);
+static AquaTextureHandle model_load_image(AquaRenderer* renderer, const cgltf_image* image, const char* model_path) {
+	// .glb and embedded images
+	if (image->buffer_view) {
+		const u8* buffer = cgltf_buffer_view_data(image->buffer_view);
+		if (!buffer || image->buffer_view->size > UINT32_MAX) {
+			fprintf(stderr, "[ERROR] [Aqua] [Model] Image buffer view is missing or too large in '%s'!\n", model_path);
+			return AQUA_TEXTURE_HANDLE_INVALID;
+		}
+		return aqua_renderer_create_texture_from_memory(renderer, buffer, (u32) image->buffer_view->size);
+	}
 
-    AquaTextureHandle* textures = (AquaTextureHandle*) malloc(sizeof(AquaTextureHandle) * data->images_count);
-    if (!textures) {
-        // error
-    }
+	// .gltf with an image file next to it; the uri is relative to the model file
+	if (image->uri && strncmp(image->uri, "data:", 5) != 0) {
+		const char* last_slash = strrchr(model_path, '/');
+		const char* last_backslash = strrchr(model_path, '\\');
+		if (last_backslash > last_slash) { last_slash = last_backslash; }
 
-    for (usize i = 0; i < data->images_count; i++) {
-        cgltf_image* image = &data->images[i];
+		usize directory_length = last_slash ? (usize) (last_slash - model_path) + 1 : 0;
+		usize uri_length = strlen(image->uri);
 
-        const u8* image_buffer = cgltf_buffer_view_data(image->buffer_view);
+		char* image_path = (char*) malloc(directory_length + uri_length + 1);
+		if (!image_path) {
+			fprintf(stderr, "[ERROR] [Aqua] [Model] Failed to allocate memory for image path!\n");
+			return AQUA_TEXTURE_HANDLE_INVALID;
+		}
+		memcpy(image_path, model_path, directory_length);
+		memcpy(image_path + directory_length, image->uri, uri_length + 1);
+		cgltf_decode_uri(image_path + directory_length);
 
-        textures[i] = aqua_renderer_create_texture_from_memory(renderer, image_buffer, (u32) image->buffer_view->size);
-    }
+		AquaTextureHandle texture = aqua_renderer_create_texture(renderer, image_path);
+		free(image_path);
+		return texture;
+	}
 
-    u32 total_vertices_count = 0;
-    u32 total_indices_count = 0;
-    u32 total_primitive_count = 0;
+	fprintf(stderr, "[WARNING] [Aqua] [Model] Skipping unsupported image (data URI) in '%s'\n", model_path);
+	return AQUA_TEXTURE_HANDLE_INVALID;
+}
 
-    for (usize n = 0; n < data->nodes_count; n++) {
-        cgltf_node* node = &data->nodes[n];
-        if (!node->mesh) { continue; }
+static AquaMaterialHandle model_create_material(AquaRenderer* renderer, const cgltf_data* data, const cgltf_material* gltf_material, const AquaTextureHandle* textures) {
+	AquaTextureHandle texture = AQUA_TEXTURE_HANDLE_INVALID;
+	AquaColor color = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-        cgltf_mesh* mesh = data->nodes[n].mesh;
-        total_primitive_count += mesh->primitives_count;
+	if (gltf_material->has_pbr_metallic_roughness) {
+		const cgltf_pbr_metallic_roughness* pbr = &gltf_material->pbr_metallic_roughness;
+		// not glm_vec4_copy: that does an aligned SIMD load and cgltf's float[4] is not 16-byte aligned
+		for (int c = 0; c < 4; c++) { color[c] = pbr->base_color_factor[c]; }
 
-        for (usize p = 0; p < mesh->primitives_count; p++) {
-            cgltf_primitive* primitive = &mesh->primitives[p];
+		if (pbr->base_color_texture.texture && pbr->base_color_texture.texture->image) {
+			texture = textures[cgltf_image_index(data, pbr->base_color_texture.texture->image)];
+		}
+	}
 
-            cgltf_accessor* position_accessor = aqua_cgltf_find_attribute(primitive, cgltf_attribute_type_position);
-            if (!position_accessor) {
-                // error
-            }
+	AquaMaterialHandle material = aqua_renderer_create_material(renderer, texture, color);
+	if (material != AQUA_MATERIAL_HANDLE_INVALID && texture == AQUA_TEXTURE_HANDLE_INVALID) {
+		// untextured: the shader samples the white default texture, so show the base color instead
+		aqua_renderer_get_material(renderer, material)->color_strength = 1.0f;
+	}
 
-            total_vertices_count += position_accessor->count;
+	return material;
+}
 
-            cgltf_accessor* indices_accessor = primitive->indices;
-            if (!indices_accessor) {
-                // error
-            }
+AquaStaticModel aqua_model_create(AquaRenderer* renderer, const char* model_path) {
+	AquaStaticModel model = {
+		.failed = true,
+		.transform = GLM_MAT4_IDENTITY_INIT,
+	};
 
-            total_indices_count += indices_accessor->count;
-        }
-    }
+	cgltf_data* data = NULL;
+	AquaVertex* vertices = NULL;
+	u32* indices = NULL;
 
-    AquaVertex* aqua_mesh_vertices = (AquaVertex*) malloc(sizeof(AquaVertex) * total_vertices_count);
-    if (!aqua_mesh_vertices) {
-        // error
-    }
+	cgltf_options options = {0};
+	cgltf_result result = cgltf_parse_file(&options, model_path, &data);
+	if (result != cgltf_result_success) {
+		fprintf(stderr, "[ERROR] [Aqua] [Model] Failed to parse gltf file '%s' (cgltf error %d)!\n", model_path, (int) result);
+		goto cleanup;
+	}
 
-    u32* aqua_mesh_indices = (u32*) malloc(sizeof(u32) * total_indices_count);
-    if (!aqua_mesh_indices) {
-        // error
-    }
+	result = cgltf_load_buffers(&options, data, model_path);
+	if (result != cgltf_result_success) {
+		fprintf(stderr, "[ERROR] [Aqua] [Model] Failed to load buffers for '%s' (cgltf error %d)!\n", model_path, (int) result);
+		goto cleanup;
+	}
 
-    AquaStaticModelSubMesh* submeshes = (AquaStaticModelSubMesh*) malloc(sizeof(AquaStaticModelSubMesh) * total_primitive_count);
-    if (!submeshes) {
-        // error
-    }
+	// checks accessor/buffer bounds, attribute counts and index ranges so the reads below stay in bounds
+	result = cgltf_validate(data);
+	if (result != cgltf_result_success) {
+		fprintf(stderr, "[ERROR] [Aqua] [Model] Invalid gltf file '%s' (cgltf error %d)!\n", model_path, (int) result);
+		goto cleanup;
+	}
 
-    u32 current_vertex_offset = 0;
-    u32 current_indices_offset = 0;
-    u32 current_submesh_index = 0;
+	// textures
+	if (data->images_count > 0) {
+		model.textures = (AquaTextureHandle*) malloc(sizeof(AquaTextureHandle) * data->images_count);
+		if (!model.textures) {
+			fprintf(stderr, "[ERROR] [Aqua] [Model] Failed to allocate memory for texture handles!\n");
+			goto cleanup;
+		}
+		model.textures_count = (u32) data->images_count;
+		for (u32 i = 0; i < model.textures_count; i++) {
+			// a failed image stays invalid and its materials draw white
+			model.textures[i] = model_load_image(renderer, &data->images[i], model_path);
+		}
+	}
 
-    for (usize n = 0; n < data->nodes_count; n++) {
-        cgltf_node* node = &data->nodes[n];
-        if (!node->mesh) { continue; }
+	// materials, one per gltf material; primitives without one use the renderer's default material
+	if (data->materials_count > 0) {
+		model.materials = (AquaMaterialHandle*) malloc(sizeof(AquaMaterialHandle) * data->materials_count);
+		if (!model.materials) {
+			fprintf(stderr, "[ERROR] [Aqua] [Model] Failed to allocate memory for materials!\n");
+			goto cleanup;
+		}
+		// not calloc: 0 is a valid handle, and cleanup destroys every non-invalid entry
+		model.materials_count = (u32) data->materials_count;
+		for (u32 i = 0; i < model.materials_count; i++) { model.materials[i] = AQUA_MATERIAL_HANDLE_INVALID; }
 
-        mat4 world_matrix;
-        cgltf_node_transform_world(node, (cgltf_float*) world_matrix);
+		for (u32 i = 0; i < model.materials_count; i++) {
+			model.materials[i] = model_create_material(renderer, data, &data->materials[i], model.textures);
+			if (model.materials[i] == AQUA_MATERIAL_HANDLE_INVALID) { goto cleanup; }
+		}
+	}
 
-        cgltf_mesh* mesh = node->mesh;
-        for (usize p = 0; p < mesh->primitives_count; p++) {
-            cgltf_primitive* primitive = &mesh->primitives[p];
+	// count what we are going to load
+	usize total_vertices_count = 0;
+	usize total_indices_count = 0;
+	usize total_submeshes_count = 0;
+	bool skipped_primitives = false;
 
-            cgltf_accessor* position_accessor = aqua_cgltf_find_attribute(primitive, cgltf_attribute_type_position);
-            if (!position_accessor) {
-                // error
-            }
-            cgltf_accessor* normal_accessor = aqua_cgltf_find_attribute(primitive, cgltf_attribute_type_normal);
-            if (!normal_accessor) {
-                // error
-            }
-            cgltf_accessor* texture_coords_accessor = aqua_cgltf_find_attribute(primitive, cgltf_attribute_type_texcoord);
-            if (!texture_coords_accessor) {
-                // error
-            }
+	for (cgltf_size n = 0; n < data->nodes_count; n++) {
+		const cgltf_mesh* mesh = data->nodes[n].mesh;
+		if (!mesh) { continue; }
 
-            for (usize i = 0; i < position_accessor->count; i++) {
-                AquaVertex* vertex = &aqua_mesh_vertices[current_vertex_offset + i];
+		for (cgltf_size p = 0; p < mesh->primitives_count; p++) {
+			const cgltf_primitive* primitive = &mesh->primitives[p];
+			if (!model_primitive_is_drawable(primitive)) {
+				skipped_primitives = true;
+				continue;
+			}
 
-                vec3 local_position;
-                cgltf_accessor_read_float(position_accessor, i, local_position, 3);
-                glm_mat4_mulv3(world_matrix, local_position, 1.0f, vertex->position);
+			const cgltf_accessor* position_accessor = model_find_attribute(primitive, cgltf_attribute_type_position);
+			if (!position_accessor) { continue; } // already ruled out by model_primitive_is_drawable; keeps the optimizer happy
+			cgltf_size primitive_vertices_count = position_accessor->count;
+			total_vertices_count += primitive_vertices_count;
+			total_indices_count += primitive->indices ? primitive->indices->count : primitive_vertices_count;
+			total_submeshes_count++;
+		}
+	}
 
-                vec3 local_normal;
-                cgltf_accessor_read_float(normal_accessor, i, local_normal, 3);
-                glm_mat4_mulv3(world_matrix, local_normal, 0.0f, vertex->normal);
-                glm_vec3_normalize(vertex->normal);
+	if (skipped_primitives) {
+		fprintf(stderr, "[WARNING] [Aqua] [Model] Skipped non-triangle or position-less primitives in '%s'\n", model_path);
+	}
+	if (total_submeshes_count == 0) {
+		fprintf(stderr, "[ERROR] [Aqua] [Model] '%s' has no drawable triangle primitives!\n", model_path);
+		goto cleanup;
+	}
+	if (total_vertices_count > UINT32_MAX || total_indices_count > UINT32_MAX) {
+		fprintf(stderr, "[ERROR] [Aqua] [Model] '%s' is too large for 32-bit indices!\n", model_path);
+		goto cleanup;
+	}
 
-                cgltf_accessor_read_float(texture_coords_accessor, i, vertex->texture_coords, 2);
-            }
+	vertices = (AquaVertex*) malloc(sizeof(AquaVertex) * total_vertices_count);
+	indices = (u32*) malloc(sizeof(u32) * total_indices_count);
+	model.submeshes = (AquaStaticModelSubMesh*) calloc(total_submeshes_count, sizeof(AquaStaticModelSubMesh));
+	if (!vertices || !indices || !model.submeshes) {
+		fprintf(stderr, "[ERROR] [Aqua] [Model] Failed to allocate memory for '%s' geometry!\n", model_path);
+		goto cleanup;
+	}
 
-            cgltf_accessor* indices_accessor = primitive->indices;
-            if (!indices_accessor) {
-                // error
-            }
+	// fill, baking each node's world transform into its vertices
+	u32 vertex_offset = 0;
+	u32 index_offset = 0;
+	u32 submesh_index = 0;
 
-            for (usize i = 0; i < indices_accessor->count; i++) {
-                aqua_mesh_indices[current_indices_offset + i] = (u32) cgltf_accessor_read_index(indices_accessor, i) + current_vertex_offset;
-            }
+	for (cgltf_size n = 0; n < data->nodes_count; n++) {
+		const cgltf_node* node = &data->nodes[n];
+		if (!node->mesh) { continue; }
 
-            submeshes[current_submesh_index].indices_start = current_indices_offset;
-            submeshes[current_submesh_index].indices_count = (u32) indices_accessor->count;
+		mat4 world_matrix;
+		cgltf_node_transform_world(node, (cgltf_float*) world_matrix);
 
-            current_vertex_offset += position_accessor->count;
-            current_indices_offset += indices_accessor->count;
+		const cgltf_mesh* mesh = node->mesh;
+		for (cgltf_size p = 0; p < mesh->primitives_count; p++) {
+			const cgltf_primitive* primitive = &mesh->primitives[p];
+			if (!model_primitive_is_drawable(primitive)) { continue; }
 
-            submeshes[current_submesh_index].material = NULL;
-            if (primitive->material) {
-                if (primitive->material->has_pbr_metallic_roughness) {
-                    if (primitive->material->pbr_metallic_roughness.base_color_texture.texture) {
-                        cgltf_image* image = primitive->material->pbr_metallic_roughness.base_color_texture.texture->image;
-                        submeshes[current_submesh_index].material = aqua_material_create(renderer, textures[cgltf_image_index(data, image)], (AquaColor) { 1.0f, 1.0f, 1.0f, 1.0f });
-                    }
-                }
-            }
+			const cgltf_accessor* position_accessor = model_find_attribute(primitive, cgltf_attribute_type_position);
+			const cgltf_accessor* normal_accessor = model_find_attribute(primitive, cgltf_attribute_type_normal);
+			const cgltf_accessor* texture_coords_accessor = model_find_attribute(primitive, cgltf_attribute_type_texcoord);
 
-            current_submesh_index++;
-        }
-    }
+			u32 primitive_vertices_count = (u32) position_accessor->count;
 
-    AquaMeshHandle mesh = aqua_renderer_create_mesh(renderer, aqua_mesh_vertices, total_vertices_count, aqua_mesh_indices, total_indices_count);
+			for (u32 i = 0; i < primitive_vertices_count; i++) {
+				AquaVertex* vertex = &vertices[vertex_offset + i];
 
-    AquaStaticModel model = {
-        .submeshes = submeshes,
-        .submeshes_count = total_primitive_count,
-        .transform = GLM_MAT4_IDENTITY_INIT,
-    };
+				vec3 local_position = { 0.0f, 0.0f, 0.0f };
+				cgltf_accessor_read_float(position_accessor, i, local_position, 3);
+				glm_mat4_mulv3(world_matrix, local_position, 1.0f, vertex->position);
 
-    for (usize i = 0; i < total_primitive_count; i++) {
-        submeshes[i].mesh = mesh;
-    }
+				vec3 local_normal = { 0.0f, 1.0f, 0.0f };
+				if (normal_accessor) { cgltf_accessor_read_float(normal_accessor, i, local_normal, 3); }
+				glm_mat4_mulv3(world_matrix, local_normal, 0.0f, vertex->normal);
+				glm_vec3_normalize(vertex->normal);
 
-    free(aqua_mesh_indices);
-    free(aqua_mesh_vertices);
-    free(textures);
-	cgltf_free(data);
+				vertex->texture_coords[0] = 0.0f;
+				vertex->texture_coords[1] = 0.0f;
+				if (texture_coords_accessor) { cgltf_accessor_read_float(texture_coords_accessor, i, vertex->texture_coords, 2); }
+			}
+
+			u32 primitive_indices_count;
+			if (primitive->indices) {
+				primitive_indices_count = (u32) primitive->indices->count;
+				for (u32 i = 0; i < primitive_indices_count; i++) {
+					indices[index_offset + i] = (u32) cgltf_accessor_read_index(primitive->indices, i) + vertex_offset;
+				}
+			} else {
+				// non-indexed primitive: every three vertices are a triangle
+				primitive_indices_count = primitive_vertices_count;
+				for (u32 i = 0; i < primitive_indices_count; i++) {
+					indices[index_offset + i] = i + vertex_offset;
+				}
+			}
+
+			AquaStaticModelSubMesh* submesh = &model.submeshes[submesh_index];
+			submesh->indices_start = index_offset;
+			submesh->indices_count = primitive_indices_count;
+			submesh->material = primitive->material
+				? model.materials[cgltf_material_index(data, primitive->material)]
+				: renderer->default_material;
+
+			vertex_offset += primitive_vertices_count;
+			index_offset += primitive_indices_count;
+			submesh_index++;
+		}
+	}
+	AquaMeshHandle mesh = aqua_renderer_create_mesh(renderer, vertices, (u32) total_vertices_count, indices, (u32) total_indices_count);
+	if (mesh == AQUA_MESH_HANDLE_INVALID) {
+		fprintf(stderr, "[ERROR] [Aqua] [Model] Failed to create mesh for '%s'!\n", model_path);
+		goto cleanup;
+	}
+
+	// only set once the mesh exists: aqua_model_destroy frees submeshes[0].mesh when submeshes_count > 0
+	model.submeshes_count = submesh_index;
+	for (u32 i = 0; i < model.submeshes_count; i++) {
+		model.submeshes[i].mesh = mesh;
+	}
+
+	model.failed = false;
+
+	#ifndef NDEBUG
+		printf("[INFO] [Aqua] [Model] Loaded Model '%s' (%u submeshes, %u materials, %u textures)\n", model_path, model.submeshes_count, model.materials_count, model.textures_count);
+	#endif
+
+cleanup:
+	// CPU-side copies only; the GPU mesh and textures belong to the model now
+	free(indices);
+	free(vertices);
+	if (data) { cgltf_free(data); }
+
+	if (model.failed) {
+		aqua_model_destroy(renderer, &model);
+		model.failed = true;
+	}
 
 	return model;
 }
 
-void aqua_model_destroy(AquaStaticModel* model) {
-    for (usize i = 0; i < model->submeshes_count; i++) {
-        aqua_material_destroy(model->submeshes->material);
-    }
+void aqua_model_destroy(AquaRenderer* renderer, AquaStaticModel* model) {
+	if (!model) { return; }
+
+	// only a loaded model has submeshes; failed loads and repeat destroys stay quiet
+	bool was_loaded = model->submeshes_count > 0;
+
+	// materials first: they reference the textures
+	for (u32 i = 0; i < model->materials_count; i++) {
+		if (model->materials[i] != AQUA_MATERIAL_HANDLE_INVALID) { aqua_renderer_destroy_material(renderer, model->materials[i]); }
+	}
+	for (u32 i = 0; i < model->textures_count; i++) {
+		if (model->textures[i] != AQUA_TEXTURE_HANDLE_INVALID) { aqua_renderer_destroy_texture(renderer, model->textures[i]); }
+	}
+	if (model->submeshes_count > 0) {
+		aqua_renderer_destroy_mesh(renderer, model->submeshes[0].mesh);
+	}
+
+	free(model->materials);
+	free(model->textures);
+	free(model->submeshes);
+
+	model->materials = NULL;
+	model->materials_count = 0;
+	model->textures = NULL;
+	model->textures_count = 0;
+	model->submeshes = NULL;
+	model->submeshes_count = 0;
+
+	#ifndef NDEBUG
+		if (was_loaded) { printf("[INFO] [Aqua] [Model] Model Destroyed\n"); }
+	#else
+		(void) was_loaded;
+	#endif
+}
+
+void aqua_model_set_transform(AquaStaticModel* model, vec3 position, vec3 rotation_degrees, vec3 scale) {
+	vec3 rotation_radians = {
+		glm_rad(rotation_degrees[0]),
+		glm_rad(rotation_degrees[1]),
+		glm_rad(rotation_degrees[2]),
+	};
+
+	mat4 rotation;
+	glm_euler_xyz(rotation_radians, rotation);
+
+	glm_translate_make(model->transform, position);
+	glm_mat4_mul(model->transform, rotation, model->transform);
+	glm_scale(model->transform, scale);
 }

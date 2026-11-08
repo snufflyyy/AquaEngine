@@ -19,6 +19,10 @@ AquaTickHandler aqua_tick_handler_create(u32 tick_rate) {
 		.frequency = SDL_GetPerformanceFrequency(),
 	};
 
+	#ifndef NDEBUG
+		printf("[INFO] [Aqua] [Tick Handler] Created Tick Handler (%u ticks/s)\n", tick_rate);
+	#endif
+
 	return tick_handler;
 }
 

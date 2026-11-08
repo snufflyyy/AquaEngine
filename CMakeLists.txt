@@ -8,11 +8,9 @@ find_package(OpenGL REQUIRED)
 add_library(glad external/glad/src/glad.c)
 target_include_directories(glad PUBLIC external/glad/include)
 
-find_package(SDL3 REQUIRED CONFIG)
-
-#set(SDL_TESTS OFF)
-#set(SDL_EXAMPLES OFF)
-#add_subdirectory(external/sdl)
+set(SDL_TESTS OFF)
+set(SDL_EXAMPLES OFF)
+add_subdirectory(external/sdl)
 
 add_subdirectory(external/cimgui)
 target_include_directories(cimgui PUBLIC
@@ -40,6 +38,7 @@ add_library(
  src/gfx/mesh/mesh.c
  src/gfx/renderer/resource-manager.c
  src/gfx/material/material.c
+ src/gfx/material/material-manager.c
  src/gfx/renderer/renderer.c
  src/gfx/model/model.c
  src/gfx/camera/camera.c
@@ -70,4 +69,11 @@ target_compile_options(${PROJECT_NAME} PRIVATE
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
  $<$<NOT:$<CONFIG:Debug>>:NDEBUG>
+)
+
+# Built-in shaders are loaded at runtime relative to the working directory, which must be the
+# root of the top-level project (the game). Computed so the engine can live anywhere inside it.
+file(RELATIVE_PATH AQUA_ENGINE_SHADER_DIRECTORY ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders)
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+ AQUA_ENGINE_SHADER_DIRECTORY="${AQUA_ENGINE_SHADER_DIRECTORY}"
 )

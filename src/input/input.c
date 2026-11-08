@@ -1,17 +1,25 @@
 #include "input.h"
 
+#include <stdio.h>
+
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include <cimgui.h>
 #include <cimgui_impl.h>
 
 AquaInputManager aqua_input_manager_create(AquaWindow* window) {
-	return (AquaInputManager) {
+	AquaInputManager input_manager = {
 		.window_ptr = window,
 		.properties = (AquaInputManagerProperties) {
 			.mouse_captured = false,
 			.show_properties_window = false,
 		}
  	};
+
+	#ifndef NDEBUG
+		printf("[INFO] [Aqua] [Input Manager] Created Input Manager\n");
+	#endif
+
+	return input_manager;
 }
 
 void aqua_input_manager_set_mouse_captured(AquaInputManager* input_manager, bool value) {
@@ -36,5 +44,9 @@ void aqua_input_manager_imgui_properties_window(AquaInputManager* input_manager)
 }
 
 void aqua_input_manager_destroy(AquaInputManager* input_manager) {
+	(void) input_manager; // nothing to release yet
 
+	#ifndef NDEBUG
+		printf("[INFO] [Aqua] [Input Manager] Input Manager Destroyed\n");
+	#endif
 }

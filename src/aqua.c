@@ -16,7 +16,7 @@
 #include "tick/tick.h"
 
 AquaEngineContext* aqua_engine_context_create(AquaProject* project, AquaEngineContextInitializeProperties properties) {
-	AquaEngineContext* aqua_context = (AquaEngineContext*) malloc(sizeof(AquaEngineContext));
+	AquaEngineContext* aqua_context = (AquaEngineContext*) calloc(1, sizeof(AquaEngineContext));
 	if (!aqua_context) {
 		fprintf(stderr, "[ERROR] [Aqua] Failed to allocate memory for aqua context!\n");
 		goto error;
@@ -61,6 +61,10 @@ AquaEngineContext* aqua_engine_context_create(AquaProject* project, AquaEngineCo
 		.show_properties_window = properties.show_properties_window,
 	};
 
+	#ifndef NDEBUG
+		printf("[INFO] [Aqua] Created Engine Context\n");
+	#endif
+
 	return aqua_context;
 
 error:
@@ -90,6 +94,7 @@ void aqua_engine_context_event(AquaEngineContext* aqua_context, AquaEvent* event
 
 void aqua_engine_context_tick(AquaEngineContext* aqua_context) {
 	assert(aqua_context != NULL);
+	(void) aqua_context; // only used by the assert, which NDEBUG removes
 
 }
 
@@ -109,6 +114,10 @@ void aqua_engine_context_destroy(AquaEngineContext* aqua_context) {
 	aqua_window_destroy(aqua_context->window);
 	SDL_Quit();
 	free(aqua_context);
+
+	#ifndef NDEBUG
+		printf("[INFO] [Aqua] Engine Context Destroyed\n");
+	#endif
 }
 
 void aqua_engine_imgui_update(AquaEngineContext* aqua_context) {

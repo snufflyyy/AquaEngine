@@ -1,5 +1,6 @@
 #include "texture.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -11,28 +12,18 @@
 
 #include "utils/base-types.h"
 
-AquaTexture aqua_texture_create(const char* image_path) {
-    i32 image_width, image_height, image_channels_count;
-    stbi_uc* image = stbi_load(image_path, &image_width, &image_height, &image_channels_count, 4);
-    if (!image) {
-        fprintf(stderr, "[ERROR] [Texture] Failed to load image!\n");
+AquaTexture aqua_texture_create_from_pixels(const u8* rgba_pixels, u32 width, u32 height) {
+    if (!rgba_pixels || width == 0 || height == 0) {
+        fprintf(stderr, "[ERROR] [Aqua] [Texture] Invalid pixel data (%ux%u)!\n", width, height);
         return (AquaTexture) { .failed = true };
     }
 
-    AquaTexture texture;
-
-    texture.width = (u32) image_width;
-    texture.height = (u32) image_height;
-
-    usize path_length = strlen(image_path);
-
-    texture.image_path = (char*) malloc((path_length + 1) * sizeof(char));
-    if (!texture.image_path) {
-   		fprintf(stderr, "[ERROR] [Aqua] [Texture] Failed to allocate memory for image path!\n");
-    	return (AquaTexture) { .failed = true };
-    }
-
-    strcpy(texture.image_path, image_path);
+    AquaTexture texture = {
+        .failed = false,
+        .width = width,
+        .height = height,
+        .image_path = NULL,
+    };
 
     glGenTextures(1, &texture.id);
 
@@ -42,14 +33,34 @@ AquaTexture aqua_texture_create(const char* image_path) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei) width, (GLsizei) height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba_pixels);
     glGenerateMipmap(GL_TEXTURE_2D);
-
-    stbi_image_free(image);
 
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    texture.failed = false;
+    return texture;
+}
+
+AquaTexture aqua_texture_create(const char* image_path) {
+    i32 image_width, image_height, image_channels_count;
+    stbi_uc* image = stbi_load(image_path, &image_width, &image_height, &image_channels_count, 4);
+    if (!image) {
+        fprintf(stderr, "[ERROR] [Aqua] [Texture] Failed to load image '%s': %s\n", image_path, stbi_failure_reason());
+        return (AquaTexture) { .failed = true };
+    }
+
+    AquaTexture texture = aqua_texture_create_from_pixels(image, (u32) image_width, (u32) image_height);
+    stbi_image_free(image);
+    if (texture.failed) { return texture; }
+
+    usize path_length = strlen(image_path);
+    texture.image_path = (char*) malloc(path_length + 1);
+    if (!texture.image_path) {
+        fprintf(stderr, "[ERROR] [Aqua] [Texture] Failed to allocate memory for image path!\n");
+        glDeleteTextures(1, &texture.id);
+        return (AquaTexture) { .failed = true };
+    }
+    memcpy(texture.image_path, image_path, path_length + 1);
 
     return texture;
 }
@@ -58,33 +69,12 @@ AquaTexture aqua_texture_create_from_memory(const u8* buffer, u32 buffer_length)
     i32 image_width, image_height, image_channels_count;
     stbi_uc* image = stbi_load_from_memory(buffer, (i32) buffer_length, &image_width, &image_height, &image_channels_count, 4);
     if (!image) {
-        fprintf(stderr, "[ERROR] [Texture] Failed to load image!\n");
+        fprintf(stderr, "[ERROR] [Aqua] [Texture] Failed to load image from memory: %s\n", stbi_failure_reason());
         return (AquaTexture) { .failed = true };
     }
 
-    AquaTexture texture;
-
-    texture.width = (u32) image_width;
-    texture.height = (u32) image_height;
-
-    texture.image_path = NULL;
-
-    glGenTextures(1, &texture.id);
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture.id);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
+    AquaTexture texture = aqua_texture_create_from_pixels(image, (u32) image_width, (u32) image_height);
     stbi_image_free(image);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    texture.failed = false;
 
     return texture;
 }
