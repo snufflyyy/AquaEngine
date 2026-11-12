@@ -1,182 +1,162 @@
 #include "aqua.h"
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <assert.h>
-
-#include <glad/glad.h>
-#include <SDL3/SDL.h>
-
-#include "cimgui.h"
-#include "event/event.h"
 #include "gfx/renderer/renderer.h"
-#include "gfx/window/window.h"
-#include "input/input.h"
-#include "project/project.h"
-#include "tick/tick.h"
+#include "event/event.h"
+
+#include <stdio.h>
+#include <stdlib.h>
 
 AquaEngineContext* aqua_engine_context_create(AquaProject* project, AquaEngineContextInitializeProperties properties) {
-	AquaEngineContext* aqua_context = (AquaEngineContext*) calloc(1, sizeof(AquaEngineContext));
-	if (!aqua_context) {
-		fprintf(stderr, "[ERROR] [Aqua] Failed to allocate memory for aqua context!\n");
-		goto error;
-	}
+	if (!project) { return NULL; }
 
-	aqua_context->project = project;
+	bool input_initialized = false;
 
-	aqua_context->tick_handler = aqua_tick_handler_create(properties.tick_handler_properties.tick_rate);
+	AquaEngineContext* context = calloc(1, sizeof(*context));
+	if (!context) { return NULL; }
+
+	context->project = project;
+	context->running = true;
 
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
-		fprintf(stderr, "[ERROR] [Aqua] Failed to initialize SDL!\n");
+		fprintf(stderr, "[ERROR] [Aqua] Failed to initialize SDL: %s\n", SDL_GetError());
 		goto error;
 	}
+
+	context->clock = aqua_clock_create(properties.clock_properties);
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
- 	#ifdef __APPLE__
-   		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-    #else
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
-    #endif
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
-
-	aqua_context->window = aqua_window_create(properties.window_properties);
-	if (!aqua_context->window) {
-		fprintf(stderr, "[ERROR] [Aqua] Failed to create window!\n");
-		goto error;
-	}
-
-	aqua_context->renderer = aqua_renderer_create(properties.renderer_create_properties, aqua_context->window);
-	if (!aqua_context->renderer) {
-		fprintf(stderr, "[ERROR] [Aqua] Failed to create renderer!\n");
-		goto error;
-	}
-
-	aqua_context->input_manager = aqua_input_manager_create(aqua_context->window);
-
-	aqua_context->properties = (AquaContextProperties) {
-		.show_properties_window = properties.show_properties_window,
-	};
-
-	#ifndef NDEBUG
-		printf("[INFO] [Aqua] Created Engine Context\n");
+	#ifdef __APPLE__
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+	#else
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
 	#endif
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 
-	return aqua_context;
+	context->window = aqua_window_create(properties.window_properties);
+	if (!context->window) { goto error; }
+
+	context->renderer = aqua_renderer_create(properties.renderer_properties, context->window);
+	if (!context->renderer) { goto error; }
+
+	context->input_manager = aqua_input_manager_create(context->window);
+	input_initialized = true;
+
+	if (!aqua_input_set_properties(context, properties.input_properties)) { goto error; }
+
+	(void) aqua_engine_context_set_properties(context, properties.context_properties);
+	if (project->initialize && !project->initialize(context)) {
+		fprintf(stderr, "[ERROR] [Aqua] Failed to initialize project '%s'!\n", project->name ? project->name : "");
+		goto error;
+	}
+
+	return context;
 
 error:
-	if (aqua_context) {
-		if (aqua_context->renderer) { aqua_renderer_destroy(aqua_context->renderer); }
-		if (aqua_context->window) { aqua_window_destroy(aqua_context->window); }
-		SDL_Quit();
-		free(aqua_context);
-	}
+	if (input_initialized) { aqua_input_manager_destroy(&context->input_manager); }
+	if (context->renderer) { aqua_renderer_destroy(context->renderer); }
+	if (context->window) { aqua_window_destroy(context->window); }
+	SDL_Quit();
+	free(context);
 	return NULL;
 }
 
-void aqua_engine_context_event(AquaEngineContext* aqua_context, AquaEvent* event) {
-	assert(aqua_context != NULL);
-	assert(event != NULL);
+AquaRenderer* aqua_engine_context_get_renderer(AquaEngineContext* context) { return context->renderer; }
+AquaWindow* aqua_engine_context_get_window(AquaEngineContext* context) { return context->window; }
+void* aqua_engine_context_get_project_data(AquaEngineContext* context) { return context->project->project_data_ptr; }
+f64 aqua_engine_context_get_delta_time(const AquaEngineContext* context) { return context->clock.delta_time; }
+void aqua_engine_context_request_exit(AquaEngineContext* context) { context->running = false; }
 
-	switch (event->type) {
-		case AQUA_EVENT_TYPE_EXIT: aqua_context->running = false; break;
-		default: break;
-	}
-
-	aqua_window_event(aqua_context->window, event);
-
-	aqua_context->renderer->properties.imgui_process_input = !aqua_context->input_manager.properties.mouse_captured;
-	aqua_renderer_event(aqua_context->renderer, event);
+AquaContextProperties aqua_engine_context_get_properties(const AquaEngineContext* context) {
+	return context->properties;
 }
 
-void aqua_engine_context_tick(AquaEngineContext* aqua_context) {
-	assert(aqua_context != NULL);
-	(void) aqua_context; // only used by the assert, which NDEBUG removes
-
+bool aqua_engine_context_set_properties(AquaEngineContext* context, AquaContextProperties properties) {
+	if (!context) { return false; }
+	context->properties = properties;
+	return true;
 }
 
-void aqua_engine_context_update(AquaEngineContext* aqua_context) {
-	assert(aqua_context != NULL);
-
-	aqua_renderer_update(aqua_context->renderer);
-
-	aqua_engine_imgui_update(aqua_context);
+AquaClockProperties aqua_engine_context_get_clock_properties(const AquaEngineContext* context) {
+	return aqua_clock_get_properties(&context->clock);
 }
 
-void aqua_engine_context_destroy(AquaEngineContext* aqua_context) {
-	assert(aqua_context != NULL);
+bool aqua_engine_context_set_clock_properties(AquaEngineContext* context, AquaClockProperties properties) {
+	return context && aqua_clock_set_properties(&context->clock, properties);
+}
 
-	aqua_input_manager_destroy(&aqua_context->input_manager);
-	aqua_renderer_destroy(aqua_context->renderer);
-	aqua_window_destroy(aqua_context->window);
+AquaClockStats aqua_engine_context_get_clock_stats(const AquaEngineContext* context) {
+	return aqua_clock_get_stats(&context->clock);
+}
+
+AquaInputManagerProperties aqua_input_get_properties(const AquaEngineContext* context) {
+	return context->input_manager.properties;
+}
+
+bool aqua_input_set_properties(AquaEngineContext* context, AquaInputManagerProperties properties) {
+	return context && aqua_input_manager_set_properties(&context->input_manager, properties);
+}
+
+bool aqua_input_is_mouse_captured(const AquaEngineContext* context) {
+	return aqua_input_get_properties(context).mouse_captured;
+}
+
+bool aqua_input_set_mouse_captured(AquaEngineContext* context, bool captured) {
+	AquaInputManagerProperties properties = aqua_input_get_properties(context);
+	properties.mouse_captured = captured;
+	return aqua_input_set_properties(context, properties);
+}
+
+void aqua_engine_context_event(AquaEngineContext* context, const AquaEvent* event) {
+	if (event->type == AQUA_EVENT_TYPE_EXIT) { aqua_engine_context_request_exit(context); }
+	aqua_window_event(context->window, event);
+	aqua_renderer_event(context->renderer, event);
+}
+
+void aqua_engine_context_update(AquaEngineContext* context) {
+	aqua_renderer_update(context->renderer, context->clock.time);
+}
+
+void aqua_engine_context_destroy(AquaEngineContext* context) {
+	if (!context) { return; }
+	if (context->project->destroy) { context->project->destroy(context); }
+	aqua_input_manager_destroy(&context->input_manager);
+	aqua_renderer_destroy(context->renderer);
+	aqua_window_destroy(context->window);
 	SDL_Quit();
-	free(aqua_context);
-
-	#ifndef NDEBUG
-		printf("[INFO] [Aqua] Engine Context Destroyed\n");
-	#endif
+	free(context);
 }
 
-void aqua_engine_imgui_update(AquaEngineContext* aqua_context) {
-	aqua_context->project->imgui_update(aqua_context);
+void aqua_engine_run(AquaEngineContext* context) {
+	aqua_clock_reset(&context->clock);
 
-	aqua_tick_handler_imgui_update(&aqua_context->tick_handler);
-	aqua_window_imgui_update(aqua_context->window);
-	aqua_renderer_imgui_update(aqua_context->renderer);
-	aqua_input_manager_imgui_update(&aqua_context->input_manager);
-
-	if (aqua_context->properties.show_properties_window) {
-		aqua_engine_imgui_properties_window(aqua_context);
-	}
-}
-
-void aqua_engine_imgui_properties_window(AquaEngineContext* aqua_context) {
-	igBegin("Aqua Properties", &aqua_context->properties.show_properties_window, ImGuiWindowFlags_None);
-	igSeparatorText("Project");
-	igText("Name: %s\n", aqua_context->project->name);
-	igText("Creator: %s\n", aqua_context->project->creator);
-	igCheckbox("Show Project Properties", &aqua_context->project->show_properties_window);
-	igSeparatorText("Engine");
-	igCheckbox("Show Tick Handler Properties", &aqua_context->tick_handler.properties.show_properties_window);
-	igCheckbox("Show Window Properties", &aqua_context->window->properties.show_properties_window);
-	igCheckbox("Show Renderer Properties", &aqua_context->renderer->properties.show_properties_window);
-	igCheckbox("Show Input Manager Properties", &aqua_context->input_manager.properties.show_properties_window);
-	igEnd();
-}
-
-void aqua_engine_run(AquaEngineContext* aqua_context) {
-	aqua_context->running = aqua_context->project->initialize(aqua_context);
-	while (aqua_context->running) {
+	while (context->running) {
 		AquaEvent event;
-		while (aqua_event_poll(&event)) {
-			aqua_engine_context_event(aqua_context, &event);
-			aqua_context->project->event(aqua_context, &event);
+		while (aqua_event_poll(&event, context->renderer, !aqua_input_is_mouse_captured(context))) {
+			aqua_engine_context_event(context, &event);
+			if (context->project->event) { context->project->event(context, &event); }
 		}
+		if (!context->running) { break; }
 
-		aqua_tick_handler_update(&aqua_context->tick_handler);
-		while (aqua_tick_handler_should_tick(&aqua_context->tick_handler)) {
-			aqua_engine_context_tick(aqua_context);
-			aqua_context->project->tick(aqua_context);
-
-			aqua_tick_handler_update_lag(&aqua_context->tick_handler);
+		aqua_clock_begin_frame(&context->clock);
+		while (context->running && aqua_clock_should_tick(&context->clock)) {
+			if (context->project->tick) { context->project->tick(context); }
+			aqua_clock_end_tick(&context->clock);
 		}
+		if (!context->running) { break; }
 
-		aqua_renderer_imgui_begin(aqua_context->renderer);
+		aqua_engine_context_update(context);
 
-		aqua_engine_context_update(aqua_context);
-		aqua_context->project->update(aqua_context);
+		aqua_renderer_imgui_begin(context->renderer);
+		aqua_engine_imgui_update(context);
 
-		aqua_context->project->render(aqua_context);
+		if (context->project->update) { context->project->update(context); }
+		if (context->running && context->project->render) { context->project->render(context); }
 
-		aqua_renderer_imgui_end(aqua_context->renderer);
+		aqua_renderer_imgui_end(context->renderer);
+		aqua_renderer_imgui_draw(context->renderer);
 
-		aqua_renderer_imgui_draw(aqua_context->renderer);
-
-		aqua_window_swap(aqua_context->window);
+		aqua_window_swap(context->window);
 	}
-
-	aqua_context->project->destroy(aqua_context);
 }

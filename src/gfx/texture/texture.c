@@ -10,7 +10,7 @@
 #include <cimgui.h>
 #include <cimgui_impl.h>
 
-#include "utils/base-types.h"
+#include <aqua/types.h>
 
 AquaTexture aqua_texture_create_from_pixels(const u8* rgba_pixels, u32 width, u32 height) {
     if (!rgba_pixels || width == 0 || height == 0) {
@@ -30,7 +30,7 @@ AquaTexture aqua_texture_create_from_pixels(const u8* rgba_pixels, u32 width, u3
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture.id);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei) width, (GLsizei) height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba_pixels);
@@ -79,7 +79,7 @@ AquaTexture aqua_texture_create_from_memory(const u8* buffer, u32 buffer_length)
     return texture;
 }
 
-void aqua_texture_imgui_collapsible_header(AquaTexture* texture, const char* header_label) {
+void aqua_texture_imgui_collapsible_header(const AquaTexture* texture, const char* header_label) {
 	if (igCollapsingHeader_BoolPtr(header_label, NULL, ImGuiTreeNodeFlags_None)) {
 		igText("ID: %u", texture->id);
 		igText("Image Path: %s", texture->image_path);
@@ -88,11 +88,11 @@ void aqua_texture_imgui_collapsible_header(AquaTexture* texture, const char* hea
 
   		ImVec2 image_preview_size;
 		if (texture->width > texture->height) {
-			image_preview_size = (ImVec2) { (((f32) texture->width / texture->height) * 256.0f), 256.0f };
+			image_preview_size = (ImVec2) { (((f32) texture->width / (f32) texture->height) * 256.0f), 256.0f };
 		} else {
-			image_preview_size = (ImVec2) { 256.0f, (((f32) texture->height / texture->width) * 256.0f) };
+			image_preview_size = (ImVec2) { 256.0f, (((f32) texture->height / (f32) texture->width) * 256.0f) };
 		}
-		igImage((ImTextureRef) { NULL, texture->id }, image_preview_size, (ImVec2) { 0.0f, 1.0f }, (ImVec2) { 1.0f, 0.0f });
+		igImage((ImTextureRef) { NULL, texture->id }, image_preview_size, (ImVec2) { 0.0f, 0.0f }, (ImVec2) { 1.0f, 1.0f });
 
 		igSeparator();
 	}

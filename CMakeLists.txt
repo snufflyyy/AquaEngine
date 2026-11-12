@@ -25,9 +25,10 @@ add_subdirectory(external/cglm)
 add_library(
  ${PROJECT_NAME}
  src/aqua.c
+ src/aqua-debug.c
 
  src/event/event.c
- src/tick/tick.c
+ src/clock/clock.c
 
  src/utils/file/file.c
 
@@ -40,7 +41,12 @@ add_library(
  src/gfx/material/material.c
  src/gfx/material/material-manager.c
  src/gfx/renderer/renderer.c
+ src/gfx/renderer/renderer-properties.c
+ src/gfx/renderer/renderer-resources.c
+ src/gfx/renderer/renderer-debug.c
  src/gfx/model/model.c
+ src/gfx/model/model-manager.c
+ src/gfx/model/model-instance.c
  src/gfx/camera/camera.c
 
  src/fly-camera/fly-camera.c
@@ -52,19 +58,32 @@ add_library(
 )
 
 target_include_directories(
- ${PROJECT_NAME} PUBLIC
- src
+ ${PROJECT_NAME}
+ PUBLIC include
+ PRIVATE src
+)
+
+# SYSTEM so warnings from their implementations (compiled inside model.c and texture.c) don't fail -Werror
+target_include_directories(
+ ${PROJECT_NAME} SYSTEM PRIVATE
  external/cgltf/include
  external/stb_image/include
 )
 
-target_compile_definitions(${PROJECT_NAME} PUBLIC -DCIMGUI_USE_OPENGL3 -DCIMGUI_USE_SDL3)
+target_compile_features(${PROJECT_NAME} PUBLIC c_std_11)
+target_compile_definitions(${PROJECT_NAME} PRIVATE CIMGUI_USE_OPENGL3 CIMGUI_USE_SDL3)
+target_link_libraries(${PROJECT_NAME} PUBLIC cglm PRIVATE glad SDL3::SDL3 cimgui)
 
-target_link_libraries(${PROJECT_NAME} PUBLIC glad SDL3::SDL3 cimgui cglm)
+# Opt-in headers/dependency for projects that build custom cimgui editor UI.
+add_library(AquaEngineDebug INTERFACE)
+target_link_libraries(AquaEngineDebug INTERFACE AquaEngine cimgui)
+target_compile_definitions(AquaEngineDebug INTERFACE CIMGUI_USE_OPENGL3 CIMGUI_USE_SDL3)
 
 target_compile_options(${PROJECT_NAME} PRIVATE
  -Wall -Wextra -Wpedantic
  -Wconversion -Wshadow -Wstrict-prototypes -Wformat=2 -Wnull-dereference
+ -Wmissing-prototypes
+ -Werror
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE

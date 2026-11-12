@@ -3,15 +3,12 @@
 #include "gfx/shader/shader.h"
 #include "gfx/texture/texture.h"
 #include "gfx/mesh/mesh.h"
-#include "utils/base-types.h"
+#include <aqua/types.h>
+#include <aqua/debug.h>
 
 #define AQUA_RENDERER_RESOURCE_MANAGER_MAX_SHADER_COUNT 1024
 #define AQUA_RENDERER_RESOURCE_MANAGER_MAX_TEXTURE_COUNT 1024
-#define AQUA_RENDERER_RESOURCE_MANAGER_MAX_MESH_COUNT 1000
-
-typedef struct AquaRendererResourceManagerProperties {
-	bool show_properties_window;
-} AquaRendererResourceManagerProperties;
+#define AQUA_RENDERER_RESOURCE_MANAGER_MAX_MESH_COUNT 1024
 
 // Fixed slots per resource type. Destroyed slots are reused by the next create of that type,
 // so a handle kept after destroying its resource may later refer to a different one.
@@ -23,7 +20,7 @@ typedef struct AquaRendererResourceManager {
 
 	AquaTexture textures[AQUA_RENDERER_RESOURCE_MANAGER_MAX_TEXTURE_COUNT];
 	bool textures_in_use[AQUA_RENDERER_RESOURCE_MANAGER_MAX_TEXTURE_COUNT];
-	u32 texture_count; // live textures
+	u32 textures_count; // live textures
 
 	AquaMesh meshes[AQUA_RENDERER_RESOURCE_MANAGER_MAX_MESH_COUNT];
 	bool meshes_in_use[AQUA_RENDERER_RESOURCE_MANAGER_MAX_MESH_COUNT];
@@ -38,7 +35,7 @@ AquaShaderHandle aqua_renderer_resource_manager_create_shader(AquaRendererResour
 AquaTextureHandle aqua_renderer_resource_manager_create_texture(AquaRendererResourceManager* resource_manager, const char* image_path);
 AquaTextureHandle aqua_renderer_resource_manager_create_texture_from_memory(AquaRendererResourceManager* resource_manager, const u8* buffer, u32 buffer_length);
 AquaTextureHandle aqua_renderer_resource_manager_create_texture_from_pixels(AquaRendererResourceManager* resource_manager, const u8* rgba_pixels, u32 width, u32 height);
-AquaMeshHandle aqua_renderer_resource_manager_create_mesh(AquaRendererResourceManager* resource_manager, AquaVertex* vertices, u32 vertices_count, GLuint* indices, u32 indices_count);
+AquaMeshHandle aqua_renderer_resource_manager_create_mesh(AquaRendererResourceManager* resource_manager, const AquaVertex* vertices, u32 vertices_count, const GLuint* indices, u32 indices_count);
 
 // release the GPU resource and free its slot; invalid handles are a no-op, destroyed ones are logged
 void aqua_renderer_resource_manager_destroy_shader(AquaRendererResourceManager* resource_manager, AquaShaderHandle shader);

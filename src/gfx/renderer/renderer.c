@@ -7,8 +7,9 @@
 #include "gfx/shader/shader.h"
 #include "gfx/texture/texture.h"
 #include "gfx/window/window.h"
-#include "utils/base-types.h"
+#include <aqua/types.h>
 
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -17,147 +18,143 @@
 #include <cimgui.h>
 #include <cimgui_impl.h>
 
-static bool renderer_can_draw(AquaRenderer* renderer) {
+static bool renderer_can_draw(const AquaRenderer* renderer) {
 	if (aqua_renderer_resource_manager_is_shader_valid(&renderer->resource_manager, renderer->current_shader) && renderer->current_camera) { return true; }
 
-	static bool warned = false;
-	if (!warned) {
-		fprintf(stderr, "[ERROR] [Aqua] [Renderer] Draw called without a bound material and camera, skipping!\n");
-		warned = true;
-	}
+	fprintf(stderr, "[ERROR] [Aqua] [Renderer] Draw called without a bound material and camera, skipping!\n");
 	return false;
 }
 
-AquaRenderer* aqua_renderer_create(AquaRendererCreateProperties create_properties, AquaWindow* window) {
+AquaRenderer* aqua_renderer_create(AquaRendererProperties properties, AquaWindow* window) {
+	bool resource_manager_initialized = false;
+	bool material_manager_initialized = false;
+	bool model_manager_initialized = false;
+	bool imgui_sdl_initialized = false;
+	bool imgui_gl_initialized = false;
+
 	AquaRenderer* renderer = (AquaRenderer*) calloc(1, sizeof(AquaRenderer));
 	if (!renderer) {
 		fprintf(stderr, "[ERROR] [Aqua] [Renderer] Failed to allocate memory for renderer!\n");
-		return NULL;
+		goto error;
 	}
 
 	renderer->gl_context = SDL_GL_CreateContext(window->sdl_window);
-    if (!renderer->gl_context) {
-   		fprintf(stderr, "[ERROR] [Aqua] [Renderer] Failed to create SDL OpenGL context!\n");
-       	free(renderer);
-       	return NULL;
-    }
+	if (!renderer->gl_context) {
+		fprintf(stderr, "[ERROR] [Aqua] [Renderer] Failed to create SDL OpenGL context!\n");
+		goto error;
+	}
 
-    if (!SDL_GL_MakeCurrent(window->sdl_window, renderer->gl_context)) {
-  		fprintf(stderr, "[ERROR] [Aqua] [Renderer] Failed to set SDL OpenGL context as current!\n");
-   		SDL_GL_DestroyContext(renderer->gl_context);
-      	free(renderer);
-      	return NULL;
-    }
+	if (!SDL_GL_MakeCurrent(window->sdl_window, renderer->gl_context)) {
+		fprintf(stderr, "[ERROR] [Aqua] [Renderer] Failed to set SDL OpenGL context as current!\n");
+		goto error;
+	}
 
-    if (!gladLoadGLLoader((GLADloadproc) SDL_GL_GetProcAddress)) {
-  		fprintf(stderr, "[ERROR] [Aqua] [Renderer] Failed load GLAD!\n");
-   		SDL_GL_DestroyContext(renderer->gl_context);
-       	free(renderer);
-       	return NULL;
-    }
+	if (!gladLoadGLLoader((GLADloadproc) SDL_GL_GetProcAddress)) {
+		fprintf(stderr, "[ERROR] [Aqua] [Renderer] Failed load GLAD!\n");
+		goto error;
+	}
 
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
 
-    glViewport(0, 0, (int) window->properties.width, (int) window->properties.height);
+    // the viewport is in pixels, which differs from the window's logical size on high-DPI displays
+    int pixel_width = (int) window->properties.width;
+    int pixel_height = (int) window->properties.height;
+    if (!SDL_GetWindowSizeInPixels(window->sdl_window, &pixel_width, &pixel_height)) {
+    	fprintf(stderr, "[WARNING] [Aqua] [Renderer] Failed to get window size in pixels, using the logical size: %s\n", SDL_GetError());
+    }
+    glViewport(0, 0, pixel_width, pixel_height);
 
     aqua_renderer_resource_manager_init(&renderer->resource_manager);
+    resource_manager_initialized = true;
     renderer->current_shader = AQUA_SHADER_HANDLE_INVALID;
 
     renderer->base_material_shader = aqua_renderer_create_shader(renderer, AQUA_ENGINE_SHADER_DIRECTORY "/material/material.vert", AQUA_ENGINE_SHADER_DIRECTORY "/material/material.frag");
     if (renderer->base_material_shader == AQUA_SHADER_HANDLE_INVALID) {
     	fprintf(stderr, "[ERROR] [Aqua] [Renderer] Failed to create base material shader from '" AQUA_ENGINE_SHADER_DIRECTORY "'!\n");
     	fprintf(stderr, "[ERROR] [Aqua] [Renderer] The working directory must be the project root (where '" AQUA_ENGINE_SHADER_DIRECTORY "' is), not the build directory.\n");
-    	aqua_renderer_resource_manager_destroy(&renderer->resource_manager);
-     	SDL_GL_DestroyContext(renderer->gl_context);
-       	free(renderer);
-       	return NULL;
+    	goto error;
     }
 
     const u8 white_pixel[4] = { 255, 255, 255, 255 };
     renderer->default_texture = aqua_renderer_create_texture_from_pixels(renderer, white_pixel, 1, 1);
     if (renderer->default_texture == AQUA_TEXTURE_HANDLE_INVALID) {
     	fprintf(stderr, "[ERROR] [Aqua] [Renderer] Failed to create default texture!\n");
-    	aqua_renderer_resource_manager_destroy(&renderer->resource_manager);
-     	SDL_GL_DestroyContext(renderer->gl_context);
-       	free(renderer);
-       	return NULL;
+    	goto error;
     }
 
     aqua_material_manager_init(&renderer->material_manager);
-    renderer->default_material = aqua_material_manager_create(&renderer->material_manager, renderer->base_material_shader, renderer->default_texture, (AquaColor) { 1.0f, 1.0f, 1.0f, 1.0f });
+    material_manager_initialized = true;
+    renderer->default_material = aqua_material_manager_create(&renderer->material_manager, &renderer->resource_manager, renderer->base_material_shader, renderer->default_texture, (AquaColor) { 1.0f, 1.0f, 1.0f, 1.0f });
     if (renderer->default_material == AQUA_MATERIAL_HANDLE_INVALID) {
     	fprintf(stderr, "[ERROR] [Aqua] [Renderer] Failed to create default material!\n");
-    	aqua_renderer_resource_manager_destroy(&renderer->resource_manager);
-     	SDL_GL_DestroyContext(renderer->gl_context);
-       	free(renderer);
-       	return NULL;
+    	goto error;
     }
 
-    renderer->last_performance_counter = SDL_GetPerformanceCounter();
-    renderer->performance_frequency = (double) SDL_GetPerformanceFrequency();
-
-    renderer->fps = 0.0f;
-    renderer->delta_time = 0.0;
+    aqua_model_manager_init(&renderer->model_manager);
+    model_manager_initialized = true;
 
     renderer->imgui_context = igCreateContext(NULL);
+    if (!renderer->imgui_context) { goto error; }
     renderer->started_imgui_frame = false;
+    renderer->imgui_process_input = true;
 
     ImGuiIO* imgui_io = igGetIO_ContextPtr(renderer->imgui_context);
     imgui_io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     #ifdef IMGUI_HAS_DOCK
-      imgui_io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    	imgui_io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     #endif
 
-    ImGui_ImplSDL3_InitForOpenGL(window->sdl_window, renderer->gl_context);
-    ImGui_ImplOpenGL3_Init(NULL);
+    imgui_sdl_initialized = ImGui_ImplSDL3_InitForOpenGL(window->sdl_window, renderer->gl_context);
+    if (!imgui_sdl_initialized) { goto error; }
+    imgui_gl_initialized = ImGui_ImplOpenGL3_Init(NULL);
+    if (!imgui_gl_initialized) { goto error; }
 
-    renderer->properties = (AquaRendererProperties) {
-    	.vsync = create_properties.vsync,
-    	.rainbow_clear_color = create_properties.rainbow_clear_color,
-     	.rainbow_clear_color_speed = create_properties.rainbow_clear_color_speed,
-      	.gl_video_driver = (char*) SDL_GetCurrentVideoDriver(),
-      	.gl_vender = (char*) glGetString(GL_VENDOR),
-      	.gl_renderer = (char*) glGetString(GL_RENDERER),
-      	.gl_opengl_version = (char*) glGetString(GL_VERSION),
-       	.gl_glsl_version = (char*) glGetString(GL_SHADING_LANGUAGE_VERSION),
-        .show_performance_window = create_properties.show_performance_window,
-        .imgui_process_input = true,
-        .show_properties_window = create_properties.show_properties_window,
+    renderer->info = (AquaRendererInfo) {
+        .gl_video_driver = SDL_GetCurrentVideoDriver(),
+        .gl_vendor = (const char*) glGetString(GL_VENDOR),
+        .gl_renderer = (const char*) glGetString(GL_RENDERER),
+        .gl_opengl_version = (const char*) glGetString(GL_VERSION),
+        .gl_glsl_version = (const char*) glGetString(GL_SHADING_LANGUAGE_VERSION),
     };
-    glm_vec3_copy(create_properties.clear_color, renderer->properties.clear_color);
-
-    aqua_renderer_set_vsync(renderer, renderer->properties.vsync);
+    if (!aqua_renderer_apply_properties(renderer, properties, true)) { goto error; }
 
    	#ifndef NDEBUG
       	printf("[INFO] [Aqua] [Renderer] Created Renderer\n");
     #endif
 
 	return renderer;
+
+error:
+	if (renderer) {
+		if (imgui_gl_initialized) { ImGui_ImplOpenGL3_Shutdown(); }
+		if (imgui_sdl_initialized) { ImGui_ImplSDL3_Shutdown(); }
+		if (renderer->imgui_context) { igDestroyContext(renderer->imgui_context); }
+		if (model_manager_initialized) { aqua_model_manager_destroy(&renderer->model_manager, renderer); }
+		if (material_manager_initialized) { aqua_material_manager_destroy(&renderer->material_manager); }
+		if (resource_manager_initialized) { aqua_renderer_resource_manager_destroy(&renderer->resource_manager); }
+		if (renderer->gl_context) { SDL_GL_DestroyContext(renderer->gl_context); }
+		free(renderer);
+	}
+	return NULL;
 }
 
-void aqua_renderer_event(AquaRenderer *renderer, AquaEvent *event) {
+void aqua_renderer_event(AquaRenderer* renderer, const AquaEvent* event) {
+	(void) renderer; // The viewport belongs to the current graphics context.
 	switch (event->type) {
-		case AQUA_EVENT_TYPE_WINDOW_RESIZED: glViewport(0, 0, (GLsizei) event->window.new_width, (GLsizei) event->window.new_height); break;
+		case AQUA_EVENT_TYPE_WINDOW_PIXEL_SIZE_CHANGED: glViewport(0, 0, (GLsizei) event->window.new_width, (GLsizei) event->window.new_height); break;
 		default: break;
 	}
-	if (renderer->properties.imgui_process_input) {
-		ImGui_ImplSDL3_ProcessEvent(&event->sdl_event);
-	}
 }
 
-void aqua_renderer_update(AquaRenderer* renderer) {
-	u64 performance_counter = SDL_GetPerformanceCounter();
-	renderer->delta_time = (double) (performance_counter - renderer->last_performance_counter) / renderer->performance_frequency;
-	renderer->last_performance_counter = performance_counter;
+void aqua_renderer_imgui_native_event(AquaRenderer* renderer, const SDL_Event* event) {
+	if (renderer->imgui_process_input) { ImGui_ImplSDL3_ProcessEvent(event); }
+}
 
-	if (renderer->delta_time > 0.0) {
-	    renderer->fps = 1.0f / ((float) renderer->delta_time);
-	}
-
+void aqua_renderer_update(AquaRenderer* renderer, f64 time) {
 	if (renderer->properties.rainbow_clear_color) {
-		float t = (float) ((double) performance_counter / (double) renderer->performance_frequency);
+		float t = (float) time;
 		float phase = renderer->properties.rainbow_clear_color_speed * t;
 
 		AquaColor new_clear_color = {
@@ -165,39 +162,25 @@ void aqua_renderer_update(AquaRenderer* renderer) {
 			0.5f + 0.5f * sinf(phase + 2.0943951f), // 2pi/3
 			0.5f + 0.5f * sinf(phase + 4.1887902f) // 4pi/3
 		};
-		aqua_renderer_set_clear_color(new_clear_color);
+		glClearColor(new_clear_color[0], new_clear_color[1], new_clear_color[2], renderer->properties.clear_color[3]);
 	}
-}
-
-void aqua_renderer_set_vsync(AquaRenderer* renderer, bool value) {
-	SDL_GL_SetSwapInterval((value) ? 1 : 0);
-	renderer->properties.vsync = value;
-}
-
-void aqua_renderer_set_clear_color(AquaColor color) {
-    glClearColor(color[0], color[1], color[2], 1.0f);
 }
 
 void aqua_renderer_clear(void) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-void aqua_renderer_bind_shader(AquaRenderer* renderer, AquaShaderHandle shader) {
+static void renderer_bind_shader(AquaRenderer* renderer, AquaShaderHandle shader) {
 	if (!aqua_renderer_resource_manager_is_shader_valid(&renderer->resource_manager, shader)) { return; }
 
 	glUseProgram(renderer->resource_manager.shaders[shader].program);
 }
 
-void aqua_renderer_rebind_shader(AquaRenderer* renderer) {
-	if (!aqua_renderer_resource_manager_is_shader_valid(&renderer->resource_manager, renderer->current_shader)) { return; }
-	glUseProgram(renderer->resource_manager.shaders[renderer->current_shader].program);
-}
-
-void aqua_renderer_bind_texture(AquaRenderer* renderer, AquaTextureHandle texture) {
+static void renderer_bind_texture(AquaRenderer* renderer, AquaTextureHandle texture, u32 texture_unit) {
 	// invalid or destroyed textures draw white
 	if (!aqua_renderer_resource_manager_is_texture_valid(&renderer->resource_manager, texture)) { texture = renderer->default_texture; }
 
-	glActiveTexture(GL_TEXTURE0);
+	glActiveTexture(GL_TEXTURE0 + texture_unit);
 	glBindTexture(GL_TEXTURE_2D, renderer->resource_manager.textures[texture].id);
 }
 
@@ -206,11 +189,7 @@ void aqua_renderer_bind_material(AquaRenderer* renderer, AquaMaterialHandle mate
     if (!material) {
     	if (material_handle != AQUA_MATERIAL_HANDLE_INVALID) {
     		// a handle that was valid once: its material was destroyed but it's still being drawn
-    		static bool warned = false;
-    		if (!warned) {
-    			fprintf(stderr, "[WARNING] [Aqua] [Renderer] Bound destroyed material %zu, using the default material!\n", material_handle);
-    			warned = true;
-    		}
+            fprintf(stderr, "[WARNING] [Aqua] [Renderer] Bound destroyed material %zu, using the default material!\n", material_handle);
     	}
     	material = aqua_material_manager_get(&renderer->material_manager, renderer->default_material);
     }
@@ -221,8 +200,8 @@ void aqua_renderer_bind_material(AquaRenderer* renderer, AquaMaterialHandle mate
     }
     AquaShader* shader = &renderer->resource_manager.shaders[material->shader];
 
-    aqua_renderer_bind_shader(renderer, material->shader);
-    aqua_renderer_bind_texture(renderer, material->texture);
+    renderer_bind_shader(renderer, material->shader);
+    renderer_bind_texture(renderer, material->texture, 0);
 
     aqua_shader_set_vec4_uniform(shader->color_uniform_location, material->color);
     aqua_shader_set_float_uniform(shader->color_strength_uniform_location, material->color_strength);
@@ -231,7 +210,7 @@ void aqua_renderer_bind_material(AquaRenderer* renderer, AquaMaterialHandle mate
 }
 
 AquaMaterialHandle aqua_renderer_create_material(AquaRenderer* renderer, AquaTextureHandle texture, AquaColor color) {
-	return aqua_material_manager_create(&renderer->material_manager, renderer->base_material_shader, texture, color);
+	return aqua_material_manager_create(&renderer->material_manager, &renderer->resource_manager, renderer->base_material_shader, texture, color);
 }
 
 void aqua_renderer_destroy_material(AquaRenderer* renderer, AquaMaterialHandle material) {
@@ -242,28 +221,21 @@ void aqua_renderer_destroy_material(AquaRenderer* renderer, AquaMaterialHandle m
 	aqua_material_manager_destroy_material(&renderer->material_manager, material);
 }
 
-AquaMaterial* aqua_renderer_get_material(AquaRenderer* renderer, AquaMaterialHandle material) {
-	return aqua_material_manager_get(&renderer->material_manager, material);
+void aqua_renderer_set_material_shader(AquaRenderer* renderer, AquaMaterialHandle material, AquaShaderHandle shader) {
+	AquaMaterialProperties properties = aqua_renderer_get_material_properties(renderer, material);
+	properties.shader = shader;
+	(void) aqua_renderer_set_material_properties(renderer, material, properties);
 }
 
-void aqua_renderer_set_material_shader(AquaRenderer* renderer, AquaMaterialHandle material_handle, AquaShaderHandle shader) {
-	AquaMaterial* material = aqua_material_manager_get(&renderer->material_manager, material_handle);
-	if (!material) {
-		fprintf(stderr, "[ERROR] [Aqua] [Renderer] Can't set shader of invalid material %zu!\n", material_handle);
-		return;
-	}
-	if (!aqua_renderer_resource_manager_is_shader_valid(&renderer->resource_manager, shader)) {
-		fprintf(stderr, "[ERROR] [Aqua] [Renderer] Can't set material %zu to invalid shader %zu!\n", material_handle, shader);
-		return;
-	}
+AquaModelHandle aqua_renderer_create_model(AquaRenderer* renderer, const char* model_path) {
+	return aqua_model_manager_create(&renderer->model_manager, renderer, model_path);
+}
 
-	material->shader = shader;
+void aqua_renderer_destroy_model(AquaRenderer* renderer, AquaModelHandle model) {
+	aqua_model_manager_destroy_model(&renderer->model_manager, renderer, model);
 }
 
 void aqua_renderer_bind_camera(AquaRenderer* renderer, AquaCamera* camera) {
-    if (camera == NULL) { return; }
-    if (camera == renderer->current_camera) { return; }
-
     renderer->current_camera = camera;
 }
 
@@ -283,7 +255,8 @@ AquaTextureHandle aqua_renderer_create_texture_from_pixels(AquaRenderer* rendere
     return aqua_renderer_resource_manager_create_texture_from_pixels(&renderer->resource_manager, rgba_pixels, width, height);
 }
 
-AquaMeshHandle aqua_renderer_create_mesh(AquaRenderer* renderer, AquaVertex* vertices, u32 vertices_count, GLuint* indices, u32 indices_count) {
+AquaMeshHandle aqua_renderer_create_mesh(AquaRenderer* renderer, const AquaVertex* vertices, u32 vertices_count, const u32* indices, u32 indices_count) {
+	assert(sizeof(u32) == sizeof(GLuint) && "OpenGL indices must be 32-bit");
 	return aqua_renderer_resource_manager_create_mesh(&renderer->resource_manager, vertices, vertices_count, indices, indices_count);
 }
 
@@ -292,6 +265,7 @@ void aqua_renderer_destroy_shader(AquaRenderer* renderer, AquaShaderHandle shade
 		fprintf(stderr, "[ERROR] [Aqua] [Renderer] The base material shader can't be destroyed!\n");
 		return;
 	}
+
 	if (shader == renderer->current_shader) { renderer->current_shader = AQUA_SHADER_HANDLE_INVALID; }
 	aqua_renderer_resource_manager_destroy_shader(&renderer->resource_manager, shader);
 }
@@ -301,6 +275,7 @@ void aqua_renderer_destroy_texture(AquaRenderer* renderer, AquaTextureHandle tex
 		fprintf(stderr, "[ERROR] [Aqua] [Renderer] The default texture can't be destroyed!\n");
 		return;
 	}
+
 	aqua_renderer_resource_manager_destroy_texture(&renderer->resource_manager, texture);
 }
 
@@ -329,6 +304,12 @@ void aqua_renderer_draw_submesh(AquaRenderer* renderer, AquaMeshHandle mesh, u32
 
     AquaMesh* m = &renderer->resource_manager.meshes[mesh];
 
+    // written as a subtraction so indices_start + indices_count can't overflow
+    if (indices_start > m->indices_count || indices_count > m->indices_count - indices_start) {
+        fprintf(stderr, "[ERROR] [Aqua] [Renderer] Submesh range [%u, %u + %u) is outside mesh %zu (%u indices), skipping!\n", indices_start, indices_start, indices_count, mesh, m->indices_count);
+    	return;
+    }
+
     AquaShader* shader = &renderer->resource_manager.shaders[renderer->current_shader];
     aqua_shader_set_mat4_uniform(shader->view_uniform_location, renderer->current_camera->view);
     aqua_shader_set_mat4_uniform(shader->projection_uniform_location, renderer->current_camera->projection);
@@ -338,13 +319,24 @@ void aqua_renderer_draw_submesh(AquaRenderer* renderer, AquaMeshHandle mesh, u32
     glDrawElements(GL_TRIANGLES, (GLsizei) indices_count, GL_UNSIGNED_INT, (void*)(uintptr_t)(indices_start * sizeof(GLuint)));
 }
 
-void aqua_renderer_draw_static_model(AquaRenderer* renderer, AquaStaticModel* model) {
-   	for (usize i = 0; i < model->submeshes_count; i++) {
-        AquaStaticModelSubMesh* submesh = &model->submeshes[i];
+void aqua_renderer_draw_static_model(AquaRenderer* renderer, AquaModelHandle model_handle, mat4 transform) {
+	const AquaStaticModel* model = aqua_model_manager_get(&renderer->model_manager, model_handle);
+	if (!model || model->failed) { return; }
 
-        aqua_renderer_bind_material(renderer, submesh->material);
-        aqua_renderer_draw_submesh(renderer, submesh->mesh, submesh->indices_start, submesh->indices_count, model->transform);
+	for (u32 i = 0; i < model->submeshes_count; i++) {
+		const AquaStaticModelSubMesh* submesh = &model->submeshes[i];
+		aqua_renderer_bind_material(renderer, submesh->material);
+		aqua_renderer_draw_submesh(renderer, submesh->mesh, submesh->indices_start, submesh->indices_count, transform);
 	}
+}
+
+void aqua_renderer_draw_model_instance(AquaRenderer* renderer, const AquaModelInstance* instance) {
+	if (!instance) { return; }
+
+	// cglm's copy takes a mutable source parameter but only reads it.
+	mat4 transform;
+	glm_mat4_copy((vec4*) instance->transform, transform);
+	aqua_renderer_draw_static_model(renderer, instance->model, transform);
 }
 
 void aqua_renderer_imgui_begin(AquaRenderer* renderer) {
@@ -358,52 +350,11 @@ void aqua_renderer_imgui_begin(AquaRenderer* renderer) {
 void aqua_renderer_imgui_update(AquaRenderer* renderer) {
 	aqua_renderer_resource_manager_imgui_update(&renderer->resource_manager);
 	aqua_material_manager_imgui_update(&renderer->material_manager, &renderer->resource_manager);
+	aqua_model_manager_imgui_update(&renderer->model_manager);
 
 	if (renderer->properties.show_properties_window) {
 		aqua_renderer_imgui_properties_window(renderer);
 	}
-	if (renderer->properties.show_performance_window) {
-		aqua_renderer_imgui_performance_window(renderer);
-	}
-}
-
-void aqua_renderer_imgui_performance_window(AquaRenderer* renderer) {
-	igBegin("Renderer Performance", &renderer->properties.show_performance_window, ImGuiWindowFlags_None);
-	igText("FPS: %0.2f", renderer->fps);
-	igText("Deltatime: %0.2f ms", renderer->delta_time * 1000.0);
-	igEnd();
-}
-
-void aqua_renderer_imgui_properties_window(AquaRenderer* renderer) {
-	igBegin("Renderer Properties", &renderer->properties.show_properties_window, ImGuiWindowFlags_None);
-	igText("FPS: %0.2f", renderer->fps);
-	igText("Deltatime: %0.2f ms", renderer->delta_time * 1000.0);
-	igSeparator();
-	igText("Video Driver: %s\n", renderer->properties.gl_video_driver);
-	igText("Vendor: %s\n", renderer->properties.gl_vender);
-	igText("Renderer: %s\n", renderer->properties.gl_renderer);
-	igText("OpenGL Version: %s\n",   renderer->properties.gl_opengl_version);
-	igText("GLSL Version: %s\n", renderer->properties.gl_glsl_version);
-	igSeparator();
-	igText("Currently bound shader handle: %zu", renderer->current_shader);
-	if (igButton("Rebind Shader", (ImVec2) { 0.0f, 0.0f })) {
-        aqua_renderer_rebind_shader(renderer);
-	}
-	igSeparator();
-	if (igCheckbox("Vsync", &renderer->properties.vsync)) { aqua_renderer_set_vsync(renderer, renderer->properties.vsync); }
-	igSeparator();
-	if (igCheckbox("Rainbow Clear Color", &renderer->properties.rainbow_clear_color)) {
-		aqua_renderer_set_clear_color(renderer->properties.clear_color);
-	}
-	igInputFloat("Rainbow Clear Color Speed", &renderer->properties.rainbow_clear_color_speed, 0.1f, 0.2f, "%0.2f", ImGuiInputTextFlags_None);
-	if (igColorEdit3("Clear Color", renderer->properties.clear_color, ImGuiColorEditFlags_None) && !renderer->properties.rainbow_clear_color) {
-		aqua_renderer_set_clear_color(renderer->properties.clear_color);
-	}
-	igSeparator();
-	igCheckbox("Performance Window", &renderer->properties.show_performance_window);
-	igCheckbox("Show Renderer Resource Manager Properties", &renderer->resource_manager.properties.show_properties_window);
-	igCheckbox("Show Material Manager Properties", &renderer->material_manager.properties.show_properties_window);
-	igEnd();
 }
 
 void aqua_renderer_imgui_end(AquaRenderer* renderer) {
@@ -426,6 +377,7 @@ void aqua_renderer_destroy(AquaRenderer* renderer) {
  	ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
 	igDestroyContext(renderer->imgui_context);
+	aqua_model_manager_destroy(&renderer->model_manager, renderer);
 	aqua_material_manager_destroy(&renderer->material_manager);
 	aqua_renderer_resource_manager_destroy(&renderer->resource_manager);
 	SDL_GL_DestroyContext(renderer->gl_context);

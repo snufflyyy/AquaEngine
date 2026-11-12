@@ -119,7 +119,14 @@ static void shader_fetch_uniform_locations(AquaShader* shader) {
 }
 
 AquaShader aqua_shader_create(const char* vertex_shader_source_path, const char* fragment_shader_source_path) {
-	AquaShader shader = { .failed = true };
+	AquaShader shader = {
+		.failed = true,
+		.projection_uniform_location = AQUA_SHADER_UNIFORM_LOCATION_INVALID,
+		.view_uniform_location = AQUA_SHADER_UNIFORM_LOCATION_INVALID,
+		.model_uniform_location = AQUA_SHADER_UNIFORM_LOCATION_INVALID,
+		.color_uniform_location = AQUA_SHADER_UNIFORM_LOCATION_INVALID,
+		.color_strength_uniform_location = AQUA_SHADER_UNIFORM_LOCATION_INVALID,
+	};
 
 	if (!shader_source_load(&shader.vertex_source, vertex_shader_source_path, GL_VERTEX_SHADER)) { goto fail; }
 	if (!shader_source_load(&shader.fragment_source, fragment_shader_source_path, GL_FRAGMENT_SHADER)) { goto fail; }
@@ -136,7 +143,7 @@ AquaShader aqua_shader_create(const char* vertex_shader_source_path, const char*
 fail:
 	shader_source_free(&shader.vertex_source);
 	shader_source_free(&shader.fragment_source);
-	return (AquaShader) { .failed = true };
+	return shader;
 }
 
 bool aqua_shader_reload(AquaShader* shader) {
@@ -163,22 +170,27 @@ AquaShaderUniformLocation aqua_shader_get_uniform_location(const AquaShader* sha
 }
 
 void aqua_shader_set_mat4_uniform(AquaShaderUniformLocation uniform_location, mat4 value) {
+	if (uniform_location == AQUA_SHADER_UNIFORM_LOCATION_INVALID) { return; }
 	glUniformMatrix4fv(uniform_location, 1, GL_FALSE, *value);
 }
 
 void aqua_shader_set_vec3_uniform(AquaShaderUniformLocation uniform_location, vec3 value) {
+	if (uniform_location == AQUA_SHADER_UNIFORM_LOCATION_INVALID) { return; }
 	glUniform3fv(uniform_location, 1, value);
 }
 
 void aqua_shader_set_vec4_uniform(AquaShaderUniformLocation uniform_location, vec4 value) {
+	if (uniform_location == AQUA_SHADER_UNIFORM_LOCATION_INVALID) { return; }
 	glUniform4fv(uniform_location, 1, value);
 }
 
 void aqua_shader_set_float_uniform(AquaShaderUniformLocation uniform_location, GLfloat value) {
+	if (uniform_location == AQUA_SHADER_UNIFORM_LOCATION_INVALID) { return; }
 	glUniform1f(uniform_location, value);
 }
 
 void aqua_shader_set_int_uniform(AquaShaderUniformLocation uniform_location, GLint value) {
+	if (uniform_location == AQUA_SHADER_UNIFORM_LOCATION_INVALID) { return; }
 	glUniform1i(uniform_location, value);
 }
 
@@ -250,4 +262,9 @@ void aqua_shader_destroy(AquaShader* shader) {
 	shader_source_free(&shader->vertex_source);
 	shader_source_free(&shader->fragment_source);
 	shader->program = 0;
+	shader->projection_uniform_location = AQUA_SHADER_UNIFORM_LOCATION_INVALID;
+	shader->view_uniform_location = AQUA_SHADER_UNIFORM_LOCATION_INVALID;
+	shader->model_uniform_location = AQUA_SHADER_UNIFORM_LOCATION_INVALID;
+	shader->color_uniform_location = AQUA_SHADER_UNIFORM_LOCATION_INVALID;
+	shader->color_strength_uniform_location = AQUA_SHADER_UNIFORM_LOCATION_INVALID;
 }

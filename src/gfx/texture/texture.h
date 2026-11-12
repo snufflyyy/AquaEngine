@@ -4,9 +4,7 @@
 
 #include <glad/glad.h>
 
-#include "utils/base-types.h"
-
-#define AQUA_TEXTURE_HANDLE_INVALID USIZE_MAX
+#include <aqua/types.h>
 
 typedef struct AquaTexture {
 	bool failed;
@@ -19,10 +17,8 @@ typedef struct AquaTexture {
 	char* image_path;
 } AquaTexture;
 
-typedef usize AquaTextureHandle;
-
 AquaTexture aqua_texture_create(const char* image_path);
 AquaTexture aqua_texture_create_from_memory(const u8* buffer, u32 buffer_length);
 AquaTexture aqua_texture_create_from_pixels(const u8* rgba_pixels, u32 width, u32 height);
-void aqua_texture_imgui_collapsible_header(AquaTexture* texture, const char* header_label);
+void aqua_texture_imgui_collapsible_header(const AquaTexture* texture, const char* header_label);
 void aqua_texture_destroy(AquaTexture* texture);

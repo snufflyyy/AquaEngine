@@ -1,7 +1,8 @@
 #include "gfx/mesh/mesh.h"
-#include "gfx/vertex.h"
 
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <glad/glad.h>
@@ -10,9 +11,9 @@
 #include <cimgui.h>
 #include <cimgui_impl.h>
 
-#include "utils/base-types.h"
+#include <aqua/types.h>
 
-AquaMesh aqua_mesh_create(AquaVertex* vertices, u32 vertices_count, GLuint* indices, u32 indices_count) {
+AquaMesh aqua_mesh_create(const AquaVertex* vertices, u32 vertices_count, const GLuint* indices, u32 indices_count) {
 	AquaMesh mesh = {
 		.vertices = (AquaVertex*) malloc(sizeof(AquaVertex) * vertices_count),
 		.vertices_count = vertices_count,
@@ -22,6 +23,7 @@ AquaMesh aqua_mesh_create(AquaVertex* vertices, u32 vertices_count, GLuint* indi
 
 	if (!mesh.vertices) {
 		fprintf(stderr, "[ERROR] [Aqua] [Mesh] Failed to allocate memory for mesh's vertices!\n");
+		free(mesh.indices); // allocated alongside the vertices, may have succeeded
 		return (AquaMesh) { .failed = true };
 	}
 
@@ -88,15 +90,28 @@ void aqua_mesh_reload(AquaMesh* mesh) {
 
 void aqua_mesh_imgui_collapsible_header(AquaMesh* mesh, const char* header_label) {
 	if (igCollapsingHeader_BoolPtr(header_label, NULL, ImGuiTreeNodeFlags_None)) {
+		igPushID_Ptr(mesh);
 		igText("Vertices Count %u", (u32) mesh->vertices_count);
-		for (usize j = 0; j < mesh->vertices_count; j++) {
-			igPushID_Int((i32) j);
-			igText("Vertex %u", j);
-			igInputFloat3("Position", mesh->vertices[j].position, "%0.2f", ImGuiInputTextFlags_None);
-			igInputFloat3("Normal", mesh->vertices[j].normal, "%0.2f", ImGuiInputTextFlags_None);
-			igInputFloat2("Texture Coordinate", mesh->vertices[j].texture_coords, "%0.2f", ImGuiInputTextFlags_None);
-			igPopID();
+
+		// big models have hundreds of thousands of vertices, so they get their own scrolling region
+		// and the clipper only builds widgets for the rows that are actually visible
+		igBeginChild_Str("##vertices", (ImVec2) { 0.0f, 300.0f }, ImGuiChildFlags_Borders, ImGuiWindowFlags_None);
+		ImGuiListClipper* clipper = ImGuiListClipper_ImGuiListClipper();
+		ImGuiListClipper_Begin(clipper, (int) mesh->vertices_count, -1.0f); // -1: measured from the first vertex
+		while (ImGuiListClipper_Step(clipper)) {
+			for (int j = clipper->DisplayStart; j < clipper->DisplayEnd; j++) {
+				igPushID_Int(j);
+				igText("Vertex %d", j);
+				igInputFloat3("Position", mesh->vertices[j].position, "%0.2f", ImGuiInputTextFlags_None);
+				igInputFloat3("Normal", mesh->vertices[j].normal, "%0.2f", ImGuiInputTextFlags_None);
+				igInputFloat2("Texture Coordinate", mesh->vertices[j].texture_coords, "%0.2f", ImGuiInputTextFlags_None);
+				igPopID();
+			}
 		}
+		ImGuiListClipper_End(clipper);
+		ImGuiListClipper_destroy(clipper);
+		igEndChild();
+
 		igSeparator();
 		igText("Indices Count: %u", (u32) mesh->indices_count);
 		igSeparator();
@@ -107,6 +122,7 @@ void aqua_mesh_imgui_collapsible_header(AquaMesh* mesh, const char* header_label
 		if (igButton("Reload Mesh", (ImVec2) { 0.0f, 0.0f })) {
 			aqua_mesh_reload(mesh);
 		}
+		igPopID();
 		igSeparator();
 	}
 }

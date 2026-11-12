@@ -1,6 +1,6 @@
 #include "resource-manager.h"
 #include "gfx/texture/texture.h"
-#include "utils/base-types.h"
+#include <aqua/types.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -31,10 +31,6 @@ void aqua_renderer_resource_manager_init(AquaRendererResourceManager* resource_m
 	#endif
 }
 
-//
-// validity
-//
-
 bool aqua_renderer_resource_manager_is_shader_valid(const AquaRendererResourceManager* resource_manager, AquaShaderHandle shader) {
 	return shader < AQUA_RENDERER_RESOURCE_MANAGER_MAX_SHADER_COUNT && resource_manager->shaders_in_use[shader];
 }
@@ -46,10 +42,6 @@ bool aqua_renderer_resource_manager_is_texture_valid(const AquaRendererResourceM
 bool aqua_renderer_resource_manager_is_mesh_valid(const AquaRendererResourceManager* resource_manager, AquaMeshHandle mesh) {
 	return mesh < AQUA_RENDERER_RESOURCE_MANAGER_MAX_MESH_COUNT && resource_manager->meshes_in_use[mesh];
 }
-
-//
-// shaders
-//
 
 AquaShaderHandle aqua_renderer_resource_manager_create_shader(AquaRendererResourceManager* resource_manager, const char* vertex_shader_source_path, const char* fragment_shader_source_path) {
 	usize i = resource_manager_find_free_slot(resource_manager->shaders_in_use, AQUA_RENDERER_RESOURCE_MANAGER_MAX_SHADER_COUNT);
@@ -77,14 +69,9 @@ void aqua_renderer_resource_manager_destroy_shader(AquaRendererResourceManager* 
 	}
 
 	aqua_shader_destroy(&resource_manager->shaders[shader]);
-	memset(&resource_manager->shaders[shader], 0, sizeof(AquaShader));
 	resource_manager->shaders_in_use[shader] = false;
 	resource_manager->shaders_count--;
 }
-
-//
-// textures
-//
 
 // shared by every texture constructor: claims a free slot and stores the result if it succeeded
 static AquaTextureHandle resource_manager_add_texture(AquaRendererResourceManager* resource_manager, AquaTexture texture) {
@@ -102,14 +89,14 @@ static AquaTextureHandle resource_manager_add_texture(AquaRendererResourceManage
 
 	resource_manager->textures[i] = texture;
 	resource_manager->textures_in_use[i] = true;
-	resource_manager->texture_count++;
+	resource_manager->textures_count++;
 
 	return i;
 }
 
 // check for space before decoding, so a full manager doesn't decode an image just to throw it away
 static bool resource_manager_has_free_texture_slot(const AquaRendererResourceManager* resource_manager) {
-	if (resource_manager->texture_count < AQUA_RENDERER_RESOURCE_MANAGER_MAX_TEXTURE_COUNT) { return true; }
+	if (resource_manager->textures_count < AQUA_RENDERER_RESOURCE_MANAGER_MAX_TEXTURE_COUNT) { return true; }
 	fprintf(stderr, "[ERROR] " RESOURCE_MANAGER_LOG " Failed to add new texture, max texture count (%u) reached!\n", AQUA_RENDERER_RESOURCE_MANAGER_MAX_TEXTURE_COUNT);
 	return false;
 }
@@ -137,16 +124,11 @@ void aqua_renderer_resource_manager_destroy_texture(AquaRendererResourceManager*
 	}
 
 	aqua_texture_destroy(&resource_manager->textures[texture]);
-	memset(&resource_manager->textures[texture], 0, sizeof(AquaTexture));
 	resource_manager->textures_in_use[texture] = false;
-	resource_manager->texture_count--;
+	resource_manager->textures_count--;
 }
 
-//
-// meshes
-//
-
-AquaMeshHandle aqua_renderer_resource_manager_create_mesh(AquaRendererResourceManager* resource_manager, AquaVertex* vertices, u32 vertices_count, GLuint* indices, u32 indices_count) {
+AquaMeshHandle aqua_renderer_resource_manager_create_mesh(AquaRendererResourceManager* resource_manager, const AquaVertex* vertices, u32 vertices_count, const GLuint* indices, u32 indices_count) {
 	usize i = resource_manager_find_free_slot(resource_manager->meshes_in_use, AQUA_RENDERER_RESOURCE_MANAGER_MAX_MESH_COUNT);
 	if (i == USIZE_MAX) {
 		fprintf(stderr, "[ERROR] " RESOURCE_MANAGER_LOG " Failed to add new mesh, max meshes count (%u) reached!\n", AQUA_RENDERER_RESOURCE_MANAGER_MAX_MESH_COUNT);
@@ -158,6 +140,7 @@ AquaMeshHandle aqua_renderer_resource_manager_create_mesh(AquaRendererResourceMa
 		fprintf(stderr, "[ERROR] " RESOURCE_MANAGER_LOG " Failed to create mesh!\n");
 		return AQUA_MESH_HANDLE_INVALID;
 	}
+
 	resource_manager->meshes_in_use[i] = true;
 	resource_manager->meshes_count++;
 
@@ -172,14 +155,9 @@ void aqua_renderer_resource_manager_destroy_mesh(AquaRendererResourceManager* re
 	}
 
 	aqua_mesh_destroy(&resource_manager->meshes[mesh]);
-	memset(&resource_manager->meshes[mesh], 0, sizeof(AquaMesh));
 	resource_manager->meshes_in_use[mesh] = false;
 	resource_manager->meshes_count--;
 }
-
-//
-// imgui
-//
 
 void aqua_renderer_resource_manager_imgui_update(AquaRendererResourceManager* resource_manager) {
 	if (resource_manager->properties.show_properties_window) {
@@ -188,7 +166,8 @@ void aqua_renderer_resource_manager_imgui_update(AquaRendererResourceManager* re
 }
 
 void aqua_renderer_resource_manager_imgui_properties_window(AquaRendererResourceManager* resource_manager) {
-	igBegin("Renderer Resource Manager Properties", &resource_manager->properties.show_properties_window, ImGuiWindowFlags_None);
+	AquaRendererResourceManagerProperties properties = resource_manager->properties;
+	igBegin("Renderer Resource Manager Properties", &properties.show_properties_window, ImGuiWindowFlags_None);
 
 	char separator_text_buffer[64];
 	char label_buffer[64];
@@ -201,7 +180,7 @@ void aqua_renderer_resource_manager_imgui_properties_window(AquaRendererResource
 		aqua_shader_imgui_collapsible_header(&resource_manager->shaders[i], label_buffer);
 	}
 
-	snprintf(separator_text_buffer, sizeof(separator_text_buffer), "Textures (%u/%u)", resource_manager->texture_count, AQUA_RENDERER_RESOURCE_MANAGER_MAX_TEXTURE_COUNT);
+	snprintf(separator_text_buffer, sizeof(separator_text_buffer), "Textures (%u/%u)", resource_manager->textures_count, AQUA_RENDERER_RESOURCE_MANAGER_MAX_TEXTURE_COUNT);
 	igSeparatorText(separator_text_buffer);
 	for (usize i = 0; i < AQUA_RENDERER_RESOURCE_MANAGER_MAX_TEXTURE_COUNT; i++) {
 		if (!resource_manager->textures_in_use[i]) { continue; }
@@ -218,6 +197,7 @@ void aqua_renderer_resource_manager_imgui_properties_window(AquaRendererResource
 	}
 
 	igEnd();
+	resource_manager->properties = properties;
 }
 
 void aqua_renderer_resource_manager_destroy(AquaRendererResourceManager* resource_manager) {

@@ -1,19 +1,16 @@
 #include "model.h"
-#include "cglm/mat4.h"
-#include "cglm/vec3.h"
-#include "gfx/color.h"
 #include "gfx/material/material.h"
 #include "gfx/mesh/mesh.h"
 #include "gfx/renderer/renderer.h"
 #include "gfx/texture/texture.h"
-#include "gfx/vertex.h"
-#include "utils/base-types.h"
+#include <aqua/types.h>
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
@@ -89,7 +86,9 @@ static AquaMaterialHandle model_create_material(AquaRenderer* renderer, const cg
 	AquaMaterialHandle material = aqua_renderer_create_material(renderer, texture, color);
 	if (material != AQUA_MATERIAL_HANDLE_INVALID && texture == AQUA_TEXTURE_HANDLE_INVALID) {
 		// untextured: the shader samples the white default texture, so show the base color instead
-		aqua_renderer_get_material(renderer, material)->color_strength = 1.0f;
+		AquaMaterialProperties properties = aqua_renderer_get_material_properties(renderer, material);
+		properties.color_strength = 1.0f;
+		(void) aqua_renderer_set_material_properties(renderer, material, properties);
 	}
 
 	return material;
@@ -98,7 +97,6 @@ static AquaMaterialHandle model_create_material(AquaRenderer* renderer, const cg
 AquaStaticModel aqua_model_create(AquaRenderer* renderer, const char* model_path) {
 	AquaStaticModel model = {
 		.failed = true,
-		.transform = GLM_MAT4_IDENTITY_INIT,
 	};
 
 	cgltf_data* data = NULL;
@@ -214,6 +212,14 @@ AquaStaticModel aqua_model_create(AquaRenderer* renderer, const char* model_path
 		mat4 world_matrix;
 		cgltf_node_transform_world(node, (cgltf_float*) world_matrix);
 
+		// normals need the inverse-transpose so non-uniform scale doesn't skew them
+		mat3 normal_matrix;
+		glm_mat4_pick3(world_matrix, normal_matrix);
+		if (fabsf(glm_mat3_det(normal_matrix)) > 1e-12f) {
+			glm_mat3_inv(normal_matrix, normal_matrix);
+			glm_mat3_transpose(normal_matrix);
+		} // else: degenerate (e.g. zero scale), keep the plain 3x3 so normals stay finite
+
 		const cgltf_mesh* mesh = node->mesh;
 		for (cgltf_size p = 0; p < mesh->primitives_count; p++) {
 			const cgltf_primitive* primitive = &mesh->primitives[p];
@@ -234,7 +240,7 @@ AquaStaticModel aqua_model_create(AquaRenderer* renderer, const char* model_path
 
 				vec3 local_normal = { 0.0f, 1.0f, 0.0f };
 				if (normal_accessor) { cgltf_accessor_read_float(normal_accessor, i, local_normal, 3); }
-				glm_mat4_mulv3(world_matrix, local_normal, 0.0f, vertex->normal);
+				glm_mat3_mulv(normal_matrix, local_normal, vertex->normal);
 				glm_vec3_normalize(vertex->normal);
 
 				vertex->texture_coords[0] = 0.0f;
@@ -327,25 +333,11 @@ void aqua_model_destroy(AquaRenderer* renderer, AquaStaticModel* model) {
 	model->textures_count = 0;
 	model->submeshes = NULL;
 	model->submeshes_count = 0;
+	model->failed = true;
 
 	#ifndef NDEBUG
 		if (was_loaded) { printf("[INFO] [Aqua] [Model] Model Destroyed\n"); }
 	#else
 		(void) was_loaded;
 	#endif
-}
-
-void aqua_model_set_transform(AquaStaticModel* model, vec3 position, vec3 rotation_degrees, vec3 scale) {
-	vec3 rotation_radians = {
-		glm_rad(rotation_degrees[0]),
-		glm_rad(rotation_degrees[1]),
-		glm_rad(rotation_degrees[2]),
-	};
-
-	mat4 rotation;
-	glm_euler_xyz(rotation_radians, rotation);
-
-	glm_translate_make(model->transform, position);
-	glm_mat4_mul(model->transform, rotation, model->transform);
-	glm_scale(model->transform, scale);
 }

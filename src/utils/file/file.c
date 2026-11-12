@@ -5,7 +5,7 @@
 #include <string.h>
 #include <errno.h>
 
-#include "utils/base-types.h"
+#include <aqua/types.h>
 
 char* aqua_file_to_string(const char* file_path) {
     // binary mode: in text mode Windows translates line endings, so fread returns fewer bytes than ftell reported
